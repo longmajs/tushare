@@ -15,7 +15,8 @@ from tushare.stock.trading import (get_hist_data, get_tick_data,
                                    get_k_data, get_day_all,
                                    get_sina_dd, bar, tick,
                                    get_markets, quotes,
-                                   get_instrument, reset_instrument)
+                                   get_instrument, reset_instrument,
+                                   set_market_config)
 
 """
 for trading data
@@ -77,63 +78,78 @@ from tushare.stock.shibor import (shibor_data, shibor_quote_data,
 
 
 """
-for tushare pro api
-"""
-from tushare.pro.data_pro import (pro_api, pro_bar)
-
-"""
-for LHB
-"""
-from tushare.stock.billboard import (top_list, cap_tops, broker_tops,
-                                     inst_tops, inst_detail)
-
-
-"""
 for utils
 """
 from tushare.util.dateu import (trade_cal, is_holiday)
 
 
-
-from tushare.internet.boxoffice import (realtime_boxoffice, day_boxoffice,
-                                        day_cinema, month_boxoffice)
-
-from tushare.internet.indexes import (bdi)
-
-"""
-for fund data
-"""
-from tushare.fund.nav import (get_nav_open, get_nav_close, get_nav_grading,
-                              get_nav_history, get_fund_info)
-
-"""
-for trader API
-"""
-from tushare.trader.trader import TraderAPI
-
-"""
-for futures API
-"""
-from tushare.futures.intlfutures import (get_intlfuture)
+def _optional_import(loader):
+    try:
+        loader()
+    except Exception:
+        return
 
 
-from tushare.stock.globals import (global_realtime)
+def _load_pro():
+    from tushare.pro.data_pro import (pro_api, pro_bar)
+    globals().update(locals())
 
 
-from tushare.util.mailmerge import (MailMerge)
+def _load_billboard():
+    from tushare.stock.billboard import (top_list, cap_tops, broker_tops, inst_tops, inst_detail)
+    globals().update(locals())
 
 
-"""
-for futures API
-"""
-from tushare.futures.domestic import (get_cffex_daily, get_czce_daily,
-                                      get_dce_daily, get_future_daily,
-                                      get_shfe_daily, get_shfe_vwap)
+def _load_internet():
+    from tushare.internet.boxoffice import (realtime_boxoffice, day_boxoffice, day_cinema, month_boxoffice)
+    from tushare.internet.indexes import (bdi)
+    globals().update(locals())
 
 
-from tushare.coins.market import (coins_tick, coins_bar,
-                                  coins_snapshot, coins_trade)
+def _load_fund():
+    from tushare.fund.nav import (get_nav_open, get_nav_close, get_nav_grading, get_nav_history, get_fund_info)
+    globals().update(locals())
 
-from tushare.util.conns import (get_apis, close_apis)
 
-from tushare.util.upass import (get_token, set_token)
+def _load_trader():
+    from tushare.trader.trader import TraderAPI
+    globals().update(locals())
+
+
+def _load_futures():
+    from tushare.futures.intlfutures import (get_intlfuture)
+    from tushare.futures.domestic import (get_cffex_daily, get_czce_daily,
+                                          get_dce_daily, get_future_daily,
+                                          get_shfe_daily, get_shfe_vwap)
+    globals().update(locals())
+
+
+def _load_globals_mailmerge():
+    from tushare.stock.globals import (global_realtime)
+    from tushare.util.mailmerge import (MailMerge)
+    globals().update(locals())
+
+
+def _load_coins():
+    from tushare.coins.market import (coins_tick, coins_bar, coins_snapshot, coins_trade)
+    globals().update(locals())
+
+
+def _load_conns_tokens():
+    from tushare.util.conns import (get_apis, close_apis)
+    from tushare.util.upass import (get_token, set_token)
+    globals().update(locals())
+
+
+for _loader in (
+    _load_pro,
+    _load_billboard,
+    _load_internet,
+    _load_fund,
+    _load_trader,
+    _load_futures,
+    _load_globals_mailmerge,
+    _load_coins,
+    _load_conns_tokens,
+):
+    _optional_import(_loader)

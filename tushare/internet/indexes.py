@@ -9,7 +9,7 @@ Created on 2017年8月13日
 """
 
 import pandas as pd
-from pandas.compat import StringIO
+from io import StringIO
 from tushare.stock import cons as ct
 import time
 import re
@@ -79,4 +79,3 @@ def bdi(itype='D', retry_count=3,
                 df['change'] = df['change'].map(lambda x: '%.2f' % x)
                 df['change'] = df['change'].astype(float)
                 return df
-

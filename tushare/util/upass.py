@@ -25,7 +25,7 @@ def get_token():
     fp = os.path.join(user_home, ct.TOKEN_F_P)
     if os.path.exists(fp):
         df = pd.read_csv(fp)
-        return str(df.ix[0]['token'])
+        return str(df.loc[0, 'token'])
     else:
         print(ct.TOKEN_ERR_MSG)
         return None
@@ -39,7 +39,7 @@ def set_broker(broker='', user='', passwd=''):
         all = pd.read_csv(BK, dtype=object)
         if (all[all.broker == broker]['user']).any():
             all = all[all.broker != broker]
-        all = all.append(df, ignore_index=True)
+        all = pd.concat([all, df], ignore_index=True)
         all.to_csv(BK, index=False)
     else:
         df.to_csv(BK, index=False)

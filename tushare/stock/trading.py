@@ -17,19 +17,33 @@ import numpy as np
 import datetime
 from tushare.stock import cons as ct
 import re
-from pandas.compat import StringIO
+from io import StringIO
+import warnings
 from tushare.util import dateu as du
 from tushare.util.formula import MA
 import os
 from tushare.util.conns import get_apis, close_apis
 from tushare.stock.fundamental import get_stock_basics
+from tushare.stock.market_core import (
+    DataSourceUnavailable,
+    ParseError,
+    RateLimited,
+    UnsupportedFeature,
+    fetch_sina_realtime_quotes,
+    fetch_tencent_k_data,
+    fetch_tick_data,
+    fetch_today_all,
+    fetch_today_ticks,
+    is_legacy_mode,
+    set_market_config as _set_market_config,
+)
 try:
     from urllib.request import urlopen, Request
 except ImportError:
     from urllib2 import urlopen, Request
 
 
-def get_hist_data(code=None, start=None, end=None,
+def _legacy_get_hist_data(code=None, start=None, end=None,
                   ktype='D', retry_count=3,
                   pause=0.001):
     """
@@ -132,7 +146,7 @@ def _parsing_dayprice_json(types=None, page=1):
     return df
 
 
-def get_tick_data(code=None, date=None, retry_count=3, pause=0.001,
+def _legacy_get_tick_data(code=None, date=None, retry_count=3, pause=0.001,
                   src='sn'):
     """
         获取分笔数据
@@ -229,7 +243,7 @@ def get_sina_dd(code=None, date=None, vol=400, retry_count=3, pause=0.001):
     raise IOError(ct.NETWORK_URL_ERROR_MSG)
 
 
-def get_today_ticks(code=None, retry_count=3, pause=0.001):
+def _legacy_get_today_ticks(code=None, retry_count=3, pause=0.001):
     """
         获取当日分笔明细数据
     Parameters
@@ -266,8 +280,9 @@ def get_today_ticks(code=None, retry_count=3, pause=0.001):
             data = pd.DataFrame()
             ct._write_head()
             for pNo in range(1, pages+1):
-                data = data.append(_today_ticks(symbol, date, pNo,
-                                                retry_count, pause), ignore_index=True)
+                piece = _today_ticks(symbol, date, pNo, retry_count, pause)
+                if piece is not None and not piece.empty:
+                    data = pd.concat([data, piece], ignore_index=True)
         except Exception as er:
             print(str(er))
         else:
@@ -302,7 +317,7 @@ def _today_ticks(symbol, tdate, pageNo, retry_count, pause):
     raise IOError(ct.NETWORK_URL_ERROR_MSG)
         
     
-def get_today_all():
+def _legacy_get_today_all():
     """
         一次性获取最近一个日交易日所有股票的交易数据
     return
@@ -315,13 +330,12 @@ def get_today_all():
     if df is not None:
         for i in range(2, ct.PAGE_NUM[1]):
             newdf = _parsing_dayprice_json('hs_a', i)
-            df = df.append(newdf, ignore_index=True)
-    df = df.append(_parsing_dayprice_json('shfxjs', 1),
-                                               ignore_index=True)
+            df = pd.concat([df, newdf], ignore_index=True)
+    df = pd.concat([df, _parsing_dayprice_json('shfxjs', 1)], ignore_index=True)
     return df
 
 
-def get_realtime_quotes(symbols=None):
+def _legacy_get_realtime_quotes(symbols=None):
     """
         获取实时交易数据 getting real time quotes data
        用于跟踪交易情况（本次执行的结果-上一次执行的数据）
@@ -394,7 +408,7 @@ def get_realtime_quotes(symbols=None):
     return df
 
 
-def get_h_data(code, start=None, end=None, autype='qfq',
+def _legacy_get_h_data(code, start=None, end=None, autype='qfq',
                index=False, retry_count=3, pause=0.001, drop_factor=True):
     '''
     获取历史复权数据
@@ -444,7 +458,7 @@ def get_h_data(code, start=None, end=None, autype='qfq',
             if df is None:  # 可能df为空，退出循环
                 break
             else:
-                data = data.append(df, ignore_index = True)
+                data = pd.concat([data, df], ignore_index=True)
     if len(data) == 0 or len(data[(data.date >= start) & (data.date <= end)]) == 0:
         return pd.DataFrame()
     data = data.drop_duplicates('date')
@@ -472,7 +486,7 @@ def get_h_data(code, start=None, end=None, autype='qfq',
             df = df.sort_values('date', ascending = False)
             firstDate = data.head(1)['date']
             frow = df[df.date == firstDate[0]]
-            rt = get_realtime_quotes(code)
+            rt = _legacy_get_realtime_quotes(code)
             if rt is None:
                 return pd.DataFrame()
             if ((float(rt['high']) == 0) & (float(rt['low']) == 0)):
@@ -525,7 +539,7 @@ def _parase_fq_factor(code, start, end):
     text = json.loads(text)
     df = pd.DataFrame({'date':list(text['data'].keys()), 'factor':list(text['data'].values())})
     df['date'] = df['date'].map(_fun_except) # for null case
-    if df['date'].dtypes == np.object:
+    if df['date'].dtypes == object:
         df['date'] = pd.to_datetime(df['date'])
     df = df.drop_duplicates('date')
     df['factor'] = df['factor'].astype(float)
@@ -562,7 +576,7 @@ def _parse_fq_data(url, index, retry_count, pause):
                 df.columns = ct.HIST_FQ_COLS[0:7]
             else:
                 df.columns = ct.HIST_FQ_COLS
-            if df['date'].dtypes == np.object:
+            if df['date'].dtypes == object:
                 df['date'] = pd.to_datetime(df['date'])
             df = df.drop_duplicates('date')
         except ValueError as e:
@@ -621,7 +635,7 @@ def _get_index_url(index, code, qt):
     return url
 
 
-def get_k_data(code=None, start='', end='',
+def _legacy_get_k_data(code=None, start='', end='',
                   ktype='D', autype='qfq', 
                   index=False,
                   retry_count=3,
@@ -694,11 +708,12 @@ def get_k_data(code=None, start='', end='',
         raise TypeError('ktype input error.')
     data = pd.DataFrame()
     for url in urls:
-        data = data.append(_get_k_data(url, dataflag, 
-                                       symbol, code,
-                                       index, ktype,
-                                       retry_count, pause), 
-                           ignore_index=True)
+        piece = _get_k_data(url, dataflag,
+                            symbol, code,
+                            index, ktype,
+                            retry_count, pause)
+        if piece is not None and not piece.empty:
+            data = pd.concat([data, piece], ignore_index=True)
     if ktype not in ct.K_MIN_LABELS:
         if ((start is not None) & (start != '')) & ((end is not None) & (end != '')):
             if data.empty==False:       
@@ -753,15 +768,20 @@ def get_hists(symbols, start=None, end=None,
     """
     批量获取历史行情数据，具体参数和返回数据类型请参考get_hist_data接口
     """
-    df = pd.DataFrame()
+    frames = []
     if isinstance(symbols, list) or isinstance(symbols, set) or isinstance(symbols, tuple) or isinstance(symbols, pd.Series):
         for symbol in symbols:
             data = get_hist_data(symbol, start=start, end=end,
                                  ktype=ktype, retry_count=retry_count,
                                  pause=pause)
-            data['code'] = symbol
-            df = df.append(data, ignore_index=True)
-        return df
+            if data is None or data.empty:
+                continue
+            piece = data.copy()
+            piece['code'] = symbol
+            frames.append(piece.reset_index())
+        if not frames:
+            return pd.DataFrame()
+        return pd.concat(frames, ignore_index=True)
     else:
         return None
   
@@ -811,9 +831,9 @@ def bar2h5(market='', date='', freq='D', asset='E', filepath=''):
     store = pd.HDFStore(fname, "a")
     if market in ['SH', 'SZ']:
         if market == 'SH':
-            stks = stks.ix[stks.index.str[0]=='6', :]
+            stks = stks.loc[stks.index.str[0] == '6', :]
         elif market == 'SZ':
-            stks = stks.ix[stks.index.str[0]!='6', :]
+            stks = stks.loc[stks.index.str[0] != '6', :]
         else:
             stks = ''
         market = 1 if market == 'SH' else 0
@@ -951,7 +971,7 @@ def bar(code, conn=None, start_date=None, end_date=None, freq='D', asset='E',
                 for i in range(100): 
                     ds = func(ct.KTYPE[ktype], mkcode, code, i * 800, 800)
                     df =  api.to_df(ds)
-                    data = data.append(df) if i == 0 else df.append(data,  ignore_index=True)
+                    data = pd.concat([data, df], ignore_index=True)
                     if len(ds) < 800:
                         break
                 data['datetime'] = data['datetime'].apply(lambda x: str(x[0:10]))
@@ -960,7 +980,7 @@ def bar(code, conn=None, start_date=None, end_date=None, freq='D', asset='E',
                 for i in range(100): 
                     ds = func(ct.KTYPE[ktype], mkcode, code, i * 800, 800)
                     df =  api.to_df(ds)
-                    data = data.append(df) if i == 0 else df.append(data,  ignore_index=True)
+                    data = pd.concat([data, df], ignore_index=True)
                     if len(ds) < 800:
                         break
             data['datetime'] = pd.to_datetime(data['datetime'])
@@ -989,7 +1009,7 @@ def bar(code, conn=None, start_date=None, end_date=None, freq='D', asset='E',
                         data['adj_factor'] = data['adj_factor'].fillna(method='bfill')
                     else:
                         def get_val(day):
-                            return df.ix[day]['adj_factor']
+                            return df.loc[day]['adj_factor']
                         data['adj_factor'] = data.index.map(lambda x: get_val(str(x)[0:10]))
                     for col in ct.BAR_E_COLS[1:5]:
                         if adj == 'hfq':
@@ -1006,7 +1026,7 @@ def bar(code, conn=None, start_date=None, end_date=None, freq='D', asset='E',
                             data['floats'] = data['floats'].fillna(method='bfill')
                         else:
                             def get_val(day):
-                                return df.ix[day]['floats']
+                                return df.loc[day]['floats']
                             data['floats'] = data.index.map(lambda x: get_val(str(x)[0:10]))
                         data['tor'] = data['vol'] / data['floats'] 
                         data['tor'] = data['tor'].map(ct.FORMAT)
@@ -1102,7 +1122,7 @@ def tick(code, conn=None, date='', asset='E', market='', retry_count = 3):
                 else:
                     ds = con.get_history_transaction_data(market=mkcode, code=code, date=date, start=i * 300, count=300)
                 df =  api.to_df(ds)
-                data = data.append(df) if i == 0 else df.append(data,  ignore_index=True)
+                data = pd.concat([data, df], ignore_index=True)
                 if len(ds) < 300:
                     break
             if asset in['E', 'INDEX']:
@@ -1166,7 +1186,7 @@ def quotes(symbols, conn=None, asset='E', market=[], retry_count = 3):
                         df = api.to_df(api.get_security_quotes([(mkcode, code)]))
                     else:
                         df = xapi.to_df(xapi.get_instrument_quote(mkcode, code))
-                    data = data.append(df)
+                    data = pd.concat([data, df], ignore_index=True)
             else:
                 mkcode = _get_mkcode(symbols, asset=asset, xapi=xapi)
                 if asset == 'E':
@@ -1258,17 +1278,19 @@ def get_markets(xapi=None):
     
     
 def factor_adj(code):
-    df = pd.read_csv(ct.ADJ_FAC_URL%(ct.P_TYPE['http'],
-                                             ct.DOMAINS['oss'], code))
-    df = df.set_index('datetime')
-    return df
+    try:
+        df = pd.read_csv(ct.ADJ_FAC_URL % (ct.P_TYPE['http'], ct.DOMAINS['oss'], code))
+    except Exception as exc:
+        raise DataSourceUnavailable('adj factor source unavailable for code=%s' % code) from exc
+    return df.set_index('datetime')
 
 
 def factor_shares(code):
-    df = pd.read_csv(ct.SHS_FAC_URL%(ct.P_TYPE['http'],
-                                             ct.DOMAINS['oss'], code))[['datetime', 'floats']]
-    df = df.set_index('datetime')
-    return df
+    try:
+        df = pd.read_csv(ct.SHS_FAC_URL % (ct.P_TYPE['http'], ct.DOMAINS['oss'], code))[['datetime', 'floats']]
+    except Exception as exc:
+        raise DataSourceUnavailable('shares factor source unavailable for code=%s' % code) from exc
+    return df.set_index('datetime')
 
 
 def _random(n=13):
@@ -1277,5 +1299,191 @@ def _random(n=13):
     end = (10**n)-1
     return str(randint(start, end))
 
+
+def set_market_config(timeout=None, retries=None, cache_ttl=None, prefer_sources=None, enable_tdx=None):
+    """
+    设置非Pro行情引擎运行参数。
+    """
+    return _set_market_config(
+        timeout=timeout,
+        retries=retries,
+        cache_ttl=cache_ttl,
+        prefer_sources=prefer_sources,
+        enable_tdx=enable_tdx,
+    )
+
+
+def _ensure_datetime_index(df):
+    if df is None or df.empty:
+        return df
+    if 'date' in df.columns:
+        df = df.set_index('date')
+    return df.sort_index(ascending=False)
+
+
+def _build_hist_view(df, ktype='D', index=False):
+    if df is None or df.empty:
+        return pd.DataFrame()
+    dfx = df.copy()
+    if ktype.upper() in ct.K_LABELS:
+        if 'close' in dfx.columns:
+            dfx['price_change'] = dfx['close'].diff(-1)
+            dfx['p_change'] = dfx['close'].pct_change(-1) * 100
+            dfx['ma5'] = dfx['close'].rolling(window=5, min_periods=1).mean()
+            dfx['ma10'] = dfx['close'].rolling(window=10, min_periods=1).mean()
+            dfx['ma20'] = dfx['close'].rolling(window=20, min_periods=1).mean()
+        if 'volume' in dfx.columns:
+            dfx['v_ma5'] = dfx['volume'].rolling(window=5, min_periods=1).mean()
+            dfx['v_ma10'] = dfx['volume'].rolling(window=10, min_periods=1).mean()
+            dfx['v_ma20'] = dfx['volume'].rolling(window=20, min_periods=1).mean()
+        if 'turnoverratio' in dfx.columns:
+            dfx = dfx.rename(columns={'turnoverratio': 'turnover'})
+        cols = ct.INX_DAY_PRICE_COLUMNS if index else ct.DAY_PRICE_COLUMNS
+        for col in cols:
+            if col not in dfx.columns:
+                dfx[col] = 0
+        dfx = dfx[cols]
+    return _ensure_datetime_index(dfx)
+
+
+def get_k_data(code=None, start='', end='',
+               ktype='D', autype='qfq',
+               index=False,
+               retry_count=3,
+               pause=0.001):
+    """
+    获取k线数据（默认使用新版公共源引擎，可通过TS_MARKET_LEGACY=1切回旧实现）。
+    """
+    if is_legacy_mode():
+        return _legacy_get_k_data(
+            code=code,
+            start=start,
+            end=end,
+            ktype=ktype,
+            autype=autype,
+            index=index,
+            retry_count=retry_count,
+            pause=pause,
+        )
+    return fetch_tencent_k_data(
+        code=code,
+        start=start,
+        end=end,
+        ktype=ktype,
+        autype=autype,
+        index=index,
+    )
+
+
+def get_hist_data(code=None, start=None, end=None,
+                  ktype='D', retry_count=3,
+                  pause=0.001):
+    """
+    兼容接口：历史行情统一重定向到 get_k_data。
+    """
+    if is_legacy_mode():
+        return _legacy_get_hist_data(
+            code=code, start=start, end=end, ktype=ktype, retry_count=retry_count, pause=pause
+        )
+    index = code in ct.INDEX_LABELS
+    data = get_k_data(
+        code=code,
+        start='' if start is None else start,
+        end='' if end is None else end,
+        ktype=ktype,
+        autype=None,
+        index=index,
+        retry_count=retry_count,
+        pause=pause,
+    )
+    return _build_hist_view(data, ktype=ktype, index=index)
+
+
+def get_h_data(code, start=None, end=None, autype='qfq',
+               index=False, retry_count=3, pause=0.001, drop_factor=True):
+    """
+    兼容接口：复权历史行情统一重定向到 get_k_data。
+    """
+    if is_legacy_mode():
+        return _legacy_get_h_data(
+            code=code,
+            start=start,
+            end=end,
+            autype=autype,
+            index=index,
+            retry_count=retry_count,
+            pause=pause,
+            drop_factor=drop_factor,
+        )
+    start = du.today_last_year() if start is None else start
+    end = du.today() if end is None else end
+    norm_autype = autype
+    if autype is None:
+        warnings.warn('autype=None is mapped to qfq in public-source mode.')
+        norm_autype = 'qfq'
+    data = get_k_data(
+        code=code,
+        start=start,
+        end=end,
+        ktype='D',
+        autype=norm_autype,
+        index=index,
+        retry_count=retry_count,
+        pause=pause,
+    )
+    if data is None or data.empty:
+        return pd.DataFrame()
+    cols = ['date', 'open', 'high', 'close', 'low', 'volume', 'amount']
+    for col in cols:
+        if col not in data.columns:
+            data[col] = np.nan
+    data = data[cols]
+    return _ensure_datetime_index(data)
+
+
+def get_today_all():
+    """
+    获取当日全市场行情。
+    """
+    if is_legacy_mode():
+        return _legacy_get_today_all()
+    return fetch_today_all()
+
+
+def get_realtime_quotes(symbols=None):
+    """
+    获取实时行情（强制携带Referer避免403）。
+    """
+    if is_legacy_mode():
+        return _legacy_get_realtime_quotes(symbols=symbols)
+    return fetch_sina_realtime_quotes(symbols=symbols)
+
+
+def get_today_ticks(code=None, retry_count=3, pause=0.001):
+    """
+    获取当日分笔明细。
+    """
+    if is_legacy_mode():
+        return _legacy_get_today_ticks(code=code, retry_count=retry_count, pause=pause)
+    try:
+        return fetch_today_ticks(code=code, retry_count=retry_count, pause=pause)
+    except (DataSourceUnavailable, ParseError, RateLimited) as exc:
+        warnings.warn(str(exc))
+        return pd.DataFrame(columns=ct.TODAY_TICK_COLUMNS)
+
+
+def get_tick_data(code=None, date=None, retry_count=3, pause=0.001, src='sn'):
+    """
+    获取分笔数据（保留src参数兼容，内部统一走稳定页面数据链路）。
+    """
+    if is_legacy_mode():
+        return _legacy_get_tick_data(code=code, date=date, retry_count=retry_count, pause=pause, src=src)
+    try:
+        return fetch_tick_data(code=code, date=date, src=src, retry_count=retry_count, pause=pause)
+    except UnsupportedFeature:
+        raise
+    except (DataSourceUnavailable, ParseError, RateLimited) as exc:
+        warnings.warn(str(exc))
+        return pd.DataFrame(columns=ct.TICK_COLUMNS)
 
 

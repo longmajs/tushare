@@ -26,6 +26,41 @@ python 2.x/3.x
 
 [pandas](http://pandas.pydata.org/ "pandas")
 
+行情核心升级说明（无 Pro API）
+=========
+
+当前版本已为 `K线/实时/当日行情/分时分笔` 提供新的公共源引擎（不依赖 Pro API）：
+
+- 主链路：腾讯K线 + 新浪实时/当日/分笔
+- 可选增强：`pytdx`（未安装时不影响核心启动）
+- 兼容包装：`get_hist_data`、`get_h_data`、`get_tick_data` 内部重定向到新链路
+- 稳定性：统一重试、超时、缓存、可读异常
+
+可通过以下接口设置运行参数：
+
+```python
+import tushare as ts
+ts.set_market_config(
+    timeout=10,               # 请求超时秒
+    retries=3,                # 重试次数
+    cache_ttl={               # 秒
+        'kline_daily': 86400,
+        'kline_min': 60,
+        'realtime': 8,
+        'today_all': 8,
+        'today_ticks': 8
+    },
+    prefer_sources=['tencent', 'sina', 'tdx'],
+    enable_tdx=True
+)
+```
+
+如需紧急回退旧链路（过渡开关）：
+
+```bash
+TS_MARKET_LEGACY=1 python your_script.py
+```
+
 
 Installation
 ====

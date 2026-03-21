@@ -6,12 +6,25 @@ Created on 2017/09/23
 @group : waditu
 @contact: jimmysoa@sina.cn
 """
-from pytdx.hq import TdxHq_API
-from pytdx.exhq import TdxExHq_API
 from tushare.stock import cons as ct
+
+try:
+    from pytdx.hq import TdxHq_API
+    from pytdx.exhq import TdxExHq_API
+    _PYTDX_IMPORT_ERROR = None
+except Exception as _exc:
+    TdxHq_API = None
+    TdxExHq_API = None
+    _PYTDX_IMPORT_ERROR = _exc
+
+
+def _ensure_pytdx():
+    if TdxHq_API is None or TdxExHq_API is None:
+        raise ImportError("pytdx is required for this API. Please install pytdx.") from _PYTDX_IMPORT_ERROR
 
 
 def api(retry_count=3):
+    _ensure_pytdx()
     for _ in range(retry_count):
         try:
             api = TdxHq_API(heartbeat=True)
@@ -24,6 +37,7 @@ def api(retry_count=3):
 
 
 def xapi(retry_count=3):
+    _ensure_pytdx()
     for _ in range(retry_count):
         try:
             api = TdxExHq_API(heartbeat=True)
@@ -36,6 +50,7 @@ def xapi(retry_count=3):
 
 
 def xapi_x(retry_count=3):
+    _ensure_pytdx()
     for _ in range(retry_count):
         try:
             api = TdxExHq_API(heartbeat=True)

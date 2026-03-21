@@ -9,7 +9,7 @@ Created on 2015年6月10日
 """
 
 import pandas as pd
-from pandas.compat import StringIO
+from io import StringIO
 from tushare.stock import cons as ct
 import numpy as np
 import time
@@ -343,4 +343,3 @@ def _f_rows(x):
         for i in range(1, 6):
             x[i] = np.NaN
     return x
-

@@ -405,7 +405,7 @@ def _parse_nav_history_data(code, start, end, nums, ismonetary=False, retry_coun
 
         #fund_df.fillna(0, inplace=True)
 
-        if fund_df['date'].dtypes == np.object:
+        if fund_df['date'].dtypes == object:
             fund_df['date'] = pd.to_datetime(fund_df['date'])
         fund_df = fund_df.set_index('date')
         fund_df = fund_df.sort_index(ascending=False)

@@ -88,6 +88,22 @@ LIVE_DATA_URL = '%shq.%s/rn=%s&list=%s'
 DAY_PRICE_MIN_URL = '%sapi.finance.%s/akmin?scode=%s&type=%s'
 SINA_DAY_PRICE_URL = '%s%s/quotes_service/api/%s/Market_Center.getHQNodeData?num=80&sort=code&asc=0&node=%s&symbol=&_s_r_a=page&page=%s'
 # SINA_DAY_PRICE_URL = '%s%s/quotes_service/api/%s/Market_Center.getHQNodeData?num=10000&node=%s'
+
+# Public-source strategy metadata (non-Pro market engine)
+MARKET_SOURCE_PRIORITY = ['tencent', 'sina', 'tdx']
+MARKET_SOURCE_WHITELIST = {
+    'kline': ['tencent', 'tdx'],
+    'realtime': ['sina', 'tdx'],
+    'today_all': ['sina'],
+    'today_ticks': ['sina', 'tdx'],
+    'tick': ['sina', 'tdx'],
+}
+MARKET_DEPRECATED_SOURCES = {
+    'ifeng': ['get_hist_data', 'legacy_day_price'],
+    'file_tushare': ['get_day_all', 'factor_adj', 'factor_shares'],
+    'sina_downxls': ['get_tick_data(src=sn)'],
+    'netease_tick_xls': ['get_tick_data(src=nt)'],
+}
 REPORT_URL = '%s%s/q/go.php/vFinanceAnalyze/kind/mainindex/%s?s_i=&s_a=&s_c=&reportdate=%s&quarter=%s&p=%s&num=%s'
 FORECAST_URL = '%s%s/q/go.php/vFinanceAnalyze/kind/performance/%s?s_i=&s_a=&s_c=&s_type=&reportdate=%s&quarter=%s&p=%s&num=%s'
 PROFIT_URL = '%s%s/q/go.php/vFinanceAnalyze/kind/profit/%s?s_i=&s_a=&s_c=&reportdate=%s&quarter=%s&p=%s&num=%s'
