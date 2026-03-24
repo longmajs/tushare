@@ -15,10 +15,10 @@ import time
 import re
 import lxml.html
 from lxml import etree
-try:
-    from urllib.request import urlopen, Request
-except ImportError:
-    from urllib2 import urlopen, Request
+from urllib.request import urlopen, Request
+import logging
+LOG = logging.getLogger("tushare.indexes")
+
 
 def bdi(itype='D', retry_count=3,
                 pause=0.001):
@@ -30,9 +30,9 @@ def bdi(itype='D', retry_count=3,
             if len(lines) < 100: #no data
                 return None
         except Exception as e:
-                print(e)
+                LOG.warning("%s", e)
         else:
-            linestr = lines.decode('utf-8') if ct.PY3 else lines
+            linestr = lines.decode('utf-8')
             if itype == 'D': # Daily
                 reg = re.compile(r'\"chart_data\",\"(.*?)\"\);') 
                 lines = reg.findall(linestr)
@@ -61,10 +61,7 @@ def bdi(itype='D', retry_count=3,
             else: #Weekly
                 html = lxml.html.parse(StringIO(linestr))
                 res = html.xpath("//table[@class=\"style33\"]/tr/td/table[last()]")
-                if ct.PY3:
-                    sarr = [etree.tostring(node).decode('utf-8') for node in res]
-                else:
-                    sarr = [etree.tostring(node) for node in res]
+                sarr = [etree.tostring(node).decode('utf-8') for node in res]
                 sarr = ''.join(sarr)
                 sarr = '<table>%s</table>'%sarr
                 df = pd.read_html(sarr)[0][1:]

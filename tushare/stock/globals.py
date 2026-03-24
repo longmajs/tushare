@@ -11,11 +11,7 @@ Created on 2016/11/27
 import pandas as pd
 from tushare.stock import cons as ct
 from tushare.util import dateu as du
-try:
-    from urllib.request import urlopen, Request
-except ImportError:
-    from urllib2 import urlopen, Request
-
+from urllib.request import urlopen, Request
 def global_realtime(symbols=None):
     """
     全球实时指数

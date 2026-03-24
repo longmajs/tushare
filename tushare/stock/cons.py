@@ -371,7 +371,6 @@ T_PORT = 7709
 X_PORT = 7727
 
 import sys
-PY3 = (sys.version_info[0] >= 3)
 def _write_head():
     sys.stdout.write(DATA_GETTING_TIPS)
     sys.stdout.flush()

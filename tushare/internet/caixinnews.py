@@ -19,11 +19,7 @@ Created on 2017/06/09
 import re
 import datetime
 from bs4 import BeautifulSoup
-try:
-    from urllib.request import urlopen, Request
-except ImportError:
-    from urllib2 import urlopen, Request
-
+from urllib.request import urlopen, Request
 caixin_search_url = "http://search.caixin.com/search/search.jsp?startDate=%s&endDate=%s&keyword=%s&x=0&y=0"
 
 default_parser = "html.parser"

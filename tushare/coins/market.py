@@ -12,12 +12,7 @@ import pandas as pd
 import traceback
 import time
 import json
-try:
-    from urllib.request import urlopen, Request
-except ImportError:
-    from urllib2 import urlopen, Request
-
-
+from urllib.request import urlopen, Request
 URL = {
        "hb": {
               "rt"         : 'http://api.huobi.com/staticmarket/ticker_%s_json.js',

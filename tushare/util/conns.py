@@ -7,6 +7,8 @@ Created on 2017/09/23
 @contact: jimmysoa@sina.cn
 """
 from tushare.stock import cons as ct
+import logging
+LOG = logging.getLogger("tushare.conns")
 
 try:
     from pytdx.hq import TdxHq_API
@@ -30,7 +32,7 @@ def api(retry_count=3):
             api = TdxHq_API(heartbeat=True)
             api.connect(ct._get_server(), ct.T_PORT)
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
         else:
             return api
     raise IOError(ct.NETWORK_URL_ERROR_MSG)
@@ -43,7 +45,7 @@ def xapi(retry_count=3):
             api = TdxExHq_API(heartbeat=True)
             api.connect(ct._get_xserver(), ct.X_PORT)
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
         else:
             return api
     raise IOError(ct.NETWORK_URL_ERROR_MSG)
@@ -56,7 +58,7 @@ def xapi_x(retry_count=3):
             api = TdxExHq_API(heartbeat=True)
             api.connect(ct._get_xxserver(), ct.X_PORT)
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
         else:
             return api
     raise IOError(ct.NETWORK_URL_ERROR_MSG)
@@ -72,4 +74,4 @@ def close_apis(conn):
         api.disconnect()
         xapi.disconnect()
     except Exception as e:
-        print(e)
+        LOG.warning("%s", e)

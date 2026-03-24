@@ -14,10 +14,9 @@ import re
 import json
 from tushare.stock import macro_vars as vs
 from tushare.stock import cons as ct
-try:
-    from urllib.request import urlopen, Request
-except ImportError:
-    from urllib2 import urlopen, Request
+from urllib.request import urlopen, Request
+import logging
+LOG = logging.getLogger("tushare.macro")
 
 
 def get_gdp_year():
@@ -43,7 +42,7 @@ def get_gdp_year():
                                     rdint, vs.MACRO_TYPE[0], 0, 70,
                                     rdint))
     text = urlopen(request, timeout=10).read()
-    text = text.decode('gbk') if ct.PY3 else text
+    text = text.decode('gbk')
     regSym = re.compile(r'\,count:(.*?)\}')
     datastr = regSym.findall(text)
     datastr = datastr[0]
@@ -76,7 +75,7 @@ def get_gdp_quarter():
                                     rdint, vs.MACRO_TYPE[0], 1, 250,
                                     rdint))
     text = urlopen(request,timeout=10).read()
-    text = text.decode('gbk') if ct.PY3 else text
+    text = text.decode('gbk')
     regSym = re.compile(r'\,count:(.*?)\}')
     datastr = regSym.findall(text)
     datastr = datastr[0]
@@ -107,7 +106,7 @@ def get_gdp_for():
     request = Request(vs.MACRO_URL%(vs.P_TYPE['http'], vs.DOMAINS['sina'],
                                     rdint, vs.MACRO_TYPE[0], 4, 80, rdint))
     text = urlopen(request,timeout=10).read()
-    text = text.decode('gbk') if ct.PY3 else text
+    text = text.decode('gbk')
     regSym = re.compile(r'\,count:(.*?)\}')
     datastr = regSym.findall(text)
     datastr = datastr[0]
@@ -136,7 +135,7 @@ def get_gdp_pull():
     request = Request(vs.MACRO_URL%(vs.P_TYPE['http'], vs.DOMAINS['sina'],
                                     rdint, vs.MACRO_TYPE[0], 5, 60, rdint))
     text = urlopen(request,timeout=10).read()
-    text = text.decode('gbk') if ct.PY3 else text
+    text = text.decode('gbk')
     regSym = re.compile(r'\,count:(.*?)\}')
     datastr = regSym.findall(text)
     datastr = datastr[0]
@@ -165,7 +164,7 @@ def get_gdp_contrib():
     request = Request(vs.MACRO_URL%(vs.P_TYPE['http'], vs.DOMAINS['sina'], rdint,
                                     vs.MACRO_TYPE[0], 6, 60, rdint))
     text = urlopen(request, timeout=10).read()
-    text = text.decode('gbk') if ct.PY3 else text
+    text = text.decode('gbk')
     regSym = re.compile(r'\,count:(.*?)\}')
     datastr = regSym.findall(text)
     datastr = datastr[0]
@@ -190,7 +189,7 @@ def get_cpi():
                                     rdint, vs.MACRO_TYPE[1], 0, 600,
                                     rdint))
     text = urlopen(request,timeout=10).read()
-    text = text.decode('gbk') if ct.PY3 else text
+    text = text.decode('gbk')
     regSym = re.compile(r'\,count:(.*?)\}')
     datastr = regSym.findall(text)
     datastr = datastr[0]
@@ -224,7 +223,7 @@ def get_ppi():
                                     rdint, vs.MACRO_TYPE[1], 3, 600,
                                     rdint))
     text = urlopen(request, timeout=10).read()
-    text = text.decode('gbk') if ct.PY3 else text
+    text = text.decode('gbk')
     regSym = re.compile(r'\,count:(.*?)\}')
     datastr = regSym.findall(text)
     datastr = datastr[0]

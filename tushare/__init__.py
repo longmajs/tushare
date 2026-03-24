@@ -1,6 +1,9 @@
-# -*- coding:utf-8 -*- 
+# -*- coding:utf-8 -*-
 import codecs
+import logging
 import os
+
+logging.getLogger("tushare").addHandler(logging.NullHandler())
 
 __version__ = codecs.open(os.path.join(os.path.dirname(__file__), 'VERSION.txt')).read()
 __author__ = 'Jimmy Liu'

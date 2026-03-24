@@ -9,16 +9,14 @@ Created on 2016/10/01
 """
 
 import json
-import six
 import pandas as pd
 from tushare.futures import cons as ct
 
-try:
-    from urllib.request import urlopen, Request
-except ImportError:
-    from urllib2 import urlopen, Request
-    
-    
+from urllib.request import urlopen, Request
+import logging
+LOG = logging.getLogger("tushare.intlfutures")
+
+
 def get_intlfuture(symbols=None):
     symbols = ct.INTL_FUTURE_CODE if symbols is None else symbols
     df = _get_data(ct.INTL_FUTURE_URL%(ct.P_TYPE['http'], ct.DOMAINS['EM'], 
@@ -32,8 +30,7 @@ def _get_data(url):
         data_str = urlopen(request, timeout=10).read()
         data_str = data_str.split('=')[1]
         data_str = data_str.replace('futures', '"futures"')
-        if six.PY3:
-            data_str = data_str.decode('utf-8')
+        data_str = data_str.decode('utf-8')
         data_str = json.loads(data_str)
         df = pd.DataFrame([[col for col in row.split(',')] for row in data_str.values()[0]]
                         )
@@ -41,7 +38,7 @@ def _get_data(url):
         df.columns = ct.INTL_FUTURES_COL
         return df
     except Exception as er:
-        print(str(er))  
+        LOG.warning("%s", er)  
         
         
 def _random(n=13):

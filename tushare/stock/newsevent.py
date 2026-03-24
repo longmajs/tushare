@@ -9,6 +9,7 @@ Created on 2015/02/07
 """
 
 from tushare.stock import cons as ct
+from tushare.stock.market_core import _safe_json_loads
 from tushare.stock import news_vars as nv
 import pandas as pd
 from datetime import datetime
@@ -16,11 +17,9 @@ import lxml.html
 from lxml import etree
 import re
 import json
-try:
-    from urllib.request import urlopen, Request
-except ImportError:
-    from urllib2 import urlopen, Request
-
+from urllib.request import urlopen, Request
+import logging
+LOG = logging.getLogger("tushare.newsevent")
 
 
 def get_latest_news(top=None, show_content=False):
@@ -49,10 +48,7 @@ def get_latest_news(top=None, show_content=False):
         data_str = urlopen(request, timeout=10).read()
         data_str = data_str.decode('GBK')
         data_str = data_str.split('=')[1][:-1]
-        data_str = eval(data_str, type('Dummy', (dict,), 
-                                       dict(__getitem__ = lambda s, n:n))())
-        data_str = json.dumps(data_str)
-        data_str = json.loads(data_str)
+        data_str = _safe_json_loads(data_str)
         data_str = data_str['list']
         data = []
         for r in data_str:
@@ -65,7 +61,7 @@ def get_latest_news(top=None, show_content=False):
         df = pd.DataFrame(data, columns=nv.LATEST_COLS_C if show_content else nv.LATEST_COLS)
         return df
     except Exception as er:
-        print(str(er))
+        LOG.warning("%s", er)
 
 
 def latest_content(url):
@@ -82,16 +78,13 @@ def latest_content(url):
     try:
         html = lxml.html.parse(url)
         res = html.xpath('//div[@id=\"artibody\"]/p')
-        if ct.PY3:
-            sarr = [etree.tostring(node).decode('utf-8') for node in res]
-        else:
-            sarr = [etree.tostring(node) for node in res]
+        sarr = [etree.tostring(node).decode('utf-8') for node in res]
         sarr = ''.join(sarr).replace('&#12288;', '')#.replace('\n\n', '\n').
         html_content = lxml.html.fromstring(sarr)
         content = html_content.text_content()
         return content
     except Exception as er:
-        print(str(er))  
+        LOG.warning("%s", er)  
 
 
 def get_notices(code=None, date=None):
@@ -145,7 +138,7 @@ def notice_content(url):
         res = html.xpath('//div[@id=\"content\"]/pre/text()')[0]
         return res.strip()
     except Exception as er:
-        print(str(er))  
+        LOG.warning("%s", er)  
 
 
 def guba_sina(show_content=False):
@@ -164,7 +157,7 @@ def guba_sina(show_content=False):
         rcounts,阅读次数
     """
     
-    from pandas.io.common import urlopen
+    from urllib.request import urlopen
     try:
         with urlopen(nv.GUBA_SINA_URL%(ct.P_TYPE['http'],
                                        ct.DOMAINS['sina'])) as resp:
@@ -189,17 +182,14 @@ def guba_sina(show_content=False):
         df['rcounts'] = df['rcounts'].astype(float)
         return df if show_content is True else df.drop('content', axis=1)
     except Exception as er:
-        print(str(er))  
+        LOG.warning("%s", er)  
     
     
 def _guba_content(url):
     try:
         html = lxml.html.parse(url)
         res = html.xpath('//div[@class=\"ilt_p\"]/p')
-        if ct.PY3:
-            sarr = [etree.tostring(node).decode('utf-8') for node in res]
-        else:
-            sarr = [etree.tostring(node) for node in res]
+        sarr = [etree.tostring(node).decode('utf-8') for node in res]
         sarr = ''.join(sarr).replace('&#12288;', '')#.replace('\n\n', '\n').
         html_content = lxml.html.fromstring(sarr)
         content = html_content.text_content()

@@ -19,11 +19,9 @@ import json
 from io import StringIO
 from tushare.util import dateu as du
 from tushare.util.netbase import Client
-try:
-    from urllib.request import urlopen, Request
-except ImportError:
-    from urllib2 import urlopen, Request
-
+from urllib.request import urlopen, Request
+import logging
+LOG = logging.getLogger("tushare.reference")
 
 def profit_data(year=2017, top=25, 
               retry_count=3, pause=0.001):
@@ -53,8 +51,8 @@ def profit_data(year=2017, top=25,
         ct._write_head()
         df, pages = _dist_cotent(year, 0, retry_count, pause)
         for idx in range(1,int(pages)):
-            df = df.append(_dist_cotent(year, idx, retry_count,
-                                        pause), ignore_index=True)
+            df = pd.concat([df, _dist_cotent(year, idx, retry_count,
+                                        pause)], ignore_index=True)
         return df
     elif top <= 25:
         df, pages = _dist_cotent(year, 0, retry_count, pause)
@@ -67,52 +65,27 @@ def profit_data(year=2017, top=25,
             if int(allPages) < int(pages):
                 pages = allPages
             for idx in range(1, int(pages)):
-                df = df.append(_dist_cotent(year, idx, retry_count,
-                                            pause), ignore_index=True)
+                df = pd.concat([df, _dist_cotent(year, idx, retry_count,
+                                            pause)], ignore_index=True)
             return df.head(top)
         else:
             print(ct.TOP_PARAS_MSG)
     
 
 def _fun_divi(x):
-    if ct.PY3:
-        reg = re.compile(r'分红(.*?)元', re.UNICODE)
-        res = reg.findall(x)
-        return 0 if len(res)<1 else float(res[0]) 
-    else:
-        if isinstance(x, unicode):
-            s1 = unicode('分红','utf-8')
-            s2 = unicode('元','utf-8')
-            reg = re.compile(r'%s(.*?)%s'%(s1, s2), re.UNICODE)
-            res = reg.findall(x)
-            return 0 if len(res)<1 else float(res[0])
-        else:
-            return 0
+    reg = re.compile(r'分红(.*?)元', re.UNICODE)
+    res = reg.findall(x)
+    return 0 if len(res)<1 else float(res[0])
 
 
 def _fun_into(x):
-    if ct.PY3:
-            reg1 = re.compile(r'转增(.*?)股', re.UNICODE)
-            reg2 = re.compile(r'送股(.*?)股', re.UNICODE)
-            res1 = reg1.findall(x)
-            res2 = reg2.findall(x)
-            res1 = 0 if len(res1)<1 else float(res1[0])
-            res2 = 0 if len(res2)<1 else float(res2[0])
-            return res1 + res2
-    else:
-        if isinstance(x, unicode):
-            s1 = unicode('转增','utf-8')
-            s2 = unicode('送股','utf-8')
-            s3 = unicode('股','utf-8')
-            reg1 = re.compile(r'%s(.*?)%s'%(s1, s3), re.UNICODE)
-            reg2 = re.compile(r'%s(.*?)%s'%(s2, s3), re.UNICODE)
-            res1 = reg1.findall(x)
-            res2 = reg2.findall(x)
-            res1 = 0 if len(res1)<1 else float(res1[0])
-            res2 = 0 if len(res2)<1 else float(res2[0])
-            return res1 + res2
-        else:
-            return 0
+    reg1 = re.compile(r'转增(.*?)股', re.UNICODE)
+    reg2 = re.compile(r'送股(.*?)股', re.UNICODE)
+    res1 = reg1.findall(x)
+    res2 = reg2.findall(x)
+    res1 = 0 if len(res1)<1 else float(res1[0])
+    res2 = 0 if len(res2)<1 else float(res2[0])
+    return res1 + res2
     
     
 def _dist_cotent(year, pageNo, retry_count, pause):
@@ -124,10 +97,7 @@ def _dist_cotent(year, pageNo, retry_count, pause):
             html = lxml.html.parse(rv.DP_163_URL%(ct.P_TYPE['http'], ct.DOMAINS['163'],
                      ct.PAGES['163dp'], year, pageNo))  
             res = html.xpath('//div[@class=\"fn_rp_list\"]/table')
-            if ct.PY3:
-                sarr = [etree.tostring(node).decode('utf-8') for node in res]
-            else:
-                sarr = [etree.tostring(node) for node in res]
+            sarr = [etree.tostring(node).decode('utf-8') for node in res]
             sarr = ''.join(sarr)
             df = pd.read_html(sarr, skiprows=[0])[0]
             df = df.drop(df.columns[0], axis=1)
@@ -144,7 +114,7 @@ def _dist_cotent(year, pageNo, retry_count, pause):
                     asr = page[len(page)-2]
                     pages = asr.xpath('text()')
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
         else:
             if pageNo == 0:
                 return df, pages[0] if len(pages)>0 else 0
@@ -185,15 +155,12 @@ def _profit_divis(pageNo, dataArr, nextPage):
         ct._write_console()
         html = lxml.html.parse('%sdata.cfi.cn/%s'%(ct.P_TYPE['http'], nextPage))
         res = html.xpath("//table[@class=\"table_data\"]/tr")
-        if ct.PY3:
-            sarr = [etree.tostring(node).decode('utf-8') for node in res]
-        else:
-            sarr = [etree.tostring(node) for node in res]
+        sarr = [etree.tostring(node).decode('utf-8') for node in res]
         sarr = ''.join(sarr)
         sarr = sarr.replace('--', '0')
         sarr = '<table>%s</table>'%sarr
         df = pd.read_html(sarr, skiprows=[0])[0]
-        dataArr = dataArr.append(df, ignore_index=True)
+        dataArr = pd.concat([dataArr, df], ignore_index=True)
         nextPage = html.xpath('//div[@id=\"content\"]/div[2]/a[last()]/@href')[0]
         np = nextPage.split('&')[2].split('=')[1]
         if pageNo < int(np):
@@ -239,17 +206,14 @@ def _get_forecast_data(year, quarter, pageNo, dataArr):
                                                 ct.PAGE_NUM[1]),
                                parser=gparser)
         res = html.xpath("//table[@class=\"list_table\"]/tr")
-        if ct.PY3:
-            sarr = [etree.tostring(node).decode('utf-8') for node in res]
-        else:
-            sarr = [etree.tostring(node) for node in res]
+        sarr = [etree.tostring(node).decode('utf-8') for node in res]
         sarr = ''.join(sarr)
         sarr = sarr.replace('--', '0')
         sarr = '<table>%s</table>'%sarr
         df = pd.read_html(sarr)[0]
         df = df.drop([4, 5, 8], axis=1)
         df.columns = ct.FORECAST_COLS
-        dataArr = dataArr.append(df, ignore_index=True)
+        dataArr = pd.concat([dataArr, df], ignore_index=True)
         nextPage = html.xpath('//div[@class=\"pages\"]/a[last()]/@onclick')
         if len(nextPage)>0:
             pageNo = re.findall(r'\d+',nextPage[0])[0]
@@ -257,7 +221,7 @@ def _get_forecast_data(year, quarter, pageNo, dataArr):
         else:
             return dataArr
     except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
     
 
 def xsg_data(year=None, month=None, 
@@ -290,9 +254,9 @@ def xsg_data(year=None, month=None,
             request = Request(rv.XSG_URL%(ct.P_TYPE['http'], ct.DOMAINS['em'],
                                      ct.PAGES['emxsg'], year, month))
             lines = urlopen(request, timeout = 10).read()
-            lines = lines.decode('utf-8') if ct.PY3 else lines
+            lines = lines.decode('utf-8')
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
         else:
             da = lines[3:len(lines)-3]
             list =  []
@@ -346,7 +310,7 @@ def fund_holdings(year, quarter,
     ct._write_head()
     df, pages = _holding_cotent(start, end, 0, retry_count, pause)
     for idx in range(1, pages):
-        df = df.append(_holding_cotent(start, end, idx, retry_count, pause),
+        df = pd.concat([df, _holding_cotent(start, end, idx, retry_count, pause)],
                   ignore_index=True)
     return df
 
@@ -361,7 +325,7 @@ def _holding_cotent(start, end, pageNo, retry_count, pause):
                      ct.PAGES['163fh'], ct.PAGES['163fh'],
                      pageNo, start, end, _random(5)))
             lines = urlopen(request, timeout = 10).read()
-            lines = lines.decode('utf-8') if ct.PY3 else lines
+            lines = lines.decode('utf-8')
             lines = lines.replace('--', '0')
             lines = json.loads(lines)
             data = lines['list']
@@ -382,7 +346,7 @@ def _holding_cotent(start, end, pageNo, retry_count, pause):
             df = df[['code', 'name', 'date', 'nums', 'nlast', 'count', 
                          'clast', 'amount', 'ratio']]
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
         else:
             if pageNo == 0:
                 return df, int(lines['pagecount'])
@@ -434,10 +398,7 @@ def _newstocks(data, pageNo, retry_count, pause):
             res = html.xpath('//table[@id=\"NewStockTable\"]/tr')
             if len(res) == 0:
                 return data
-            if ct.PY3:
-                sarr = [etree.tostring(node).decode('utf-8') for node in res]
-            else:
-                sarr = [etree.tostring(node) for node in res]
+            sarr = [etree.tostring(node).decode('utf-8') for node in res]
             sarr = ''.join(sarr)
             sarr = sarr.replace('<font color="red">*</font>', '')
             sarr = '<table>%s</table>'%sarr
@@ -447,14 +408,14 @@ def _newstocks(data, pageNo, retry_count, pause):
             df['code'] = df['code'].map(lambda x : str(x).zfill(6))
             df['xcode'] = df['xcode'].map(lambda x : str(x).zfill(6))
             res = html.xpath('//table[@class=\"table2\"]/tr[1]/td[1]/a/text()')
-            tag = '下一页' if ct.PY3 else unicode('下一页', 'utf-8')
+            tag = '下一页'
             hasNext = True if tag in res else False 
-            data = data.append(df, ignore_index=True)
+            data = pd.concat([data, df], ignore_index=True)
             pageNo += 1
             if hasNext:
                 data = _newstocks(data, pageNo, retry_count, pause)
         except Exception as ex:
-            print(ex)
+            LOG.warning("%s", ex)
         else:
             return data 
 
@@ -497,7 +458,7 @@ def new_cbonds(default=1, retry_count=3, pause=0.001):
             df = _newcbonds(page, retry_count,
                     pause)
             if df is not None:
-                data = data.append(df, ignore_index=True)
+                data = pd.concat([data, df], ignore_index=True)
             else:
                 break
     return data
@@ -514,10 +475,7 @@ def _newcbonds(pageNo, retry_count, pause):
             res = html.xpath('//table/tr')
             if len(res) == 0:
                 return None
-            if ct.PY3:
-                sarr = [etree.tostring(node).decode('utf-8') for node in res]
-            else:
-                sarr = [etree.tostring(node) for node in res]
+            sarr = [etree.tostring(node).decode('utf-8') for node in res]
             sarr = ''.join(sarr)
             sarr = '<table>%s</table>'%sarr
             df = pd.read_html(StringIO(sarr), skiprows=[0])
@@ -529,7 +487,7 @@ def _newcbonds(pageNo, retry_count, pause):
             df['scode'] = df['scode'].map(lambda x: str(x).zfill(6))
             df['xcode'] = df['xcode'].map(lambda x: str(x).zfill(6))
         except Exception as ex:
-            print(ex)
+            LOG.warning("%s", ex)
         else:
             return df 
 
@@ -597,20 +555,20 @@ def _sh_hz(data, start=None, end=None,
             ref = rv.MAR_SH_HZ_REF_URL%(ct.P_TYPE['http'], ct.DOMAINS['sse'])
             clt = Client(url, ref=ref, cookie=rv.MAR_SH_COOKIESTR)
             lines = clt.gvalue()
-            lines = lines.decode('utf-8') if ct.PY3 else lines
+            lines = lines.decode('utf-8')
             lines = lines[19:-1]
             lines = json.loads(lines)
             pagecount = int(lines['pageHelp'].get('pageCount'))
             datapage = int(pagecount/5+1 if pagecount%5>0 else pagecount/5)
             df = pd.DataFrame(lines['result'], columns=rv.MAR_SH_HZ_COLS)
             df['opDate'] = df['opDate'].map(lambda x: '%s-%s-%s'%(x[0:4], x[4:6], x[6:8]))
-            data = data.append(df, ignore_index=True)
+            data = pd.concat([data, df], ignore_index=True)
             if beginPage < datapage*5:
                 data = _sh_hz(data, start=start, end=end, pageNo=pageNo, 
                        beginPage=beginPage, endPage=endPage, 
                        retry_count=retry_count, pause=pause)
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
         else:
             return data
     raise IOError(ct.NETWORK_URL_ERROR_MSG)
@@ -687,7 +645,7 @@ def _sh_mx(data, date='', start='', end='',
                                     symbol, start, end, tail,
                                     _random()), ref=ref, cookie=rv.MAR_SH_COOKIESTR)
             lines = clt.gvalue()
-            lines = lines.decode('utf-8') if ct.PY3 else lines
+            lines = lines.decode('utf-8')
             lines = lines[19:-1]
             lines = json.loads(lines)
             pagecount = int(lines['pageHelp'].get('pageCount'))
@@ -698,13 +656,13 @@ def _sh_mx(data, date='', start='', end='',
                 ct._write_tips(lines['pageHelp'].get('total'))
             df = pd.DataFrame(lines['result'], columns=rv.MAR_SH_MX_COLS)
             df['opDate'] = df['opDate'].map(lambda x: '%s-%s-%s'%(x[0:4], x[4:6], x[6:8]))
-            data = data.append(df, ignore_index=True)
+            data = pd.concat([data, df], ignore_index=True)
             if beginPage < datapage*5:
                 data = _sh_mx(data, start=start, end=end, pageNo=pageNo, 
                        beginPage=beginPage, endPage=endPage, 
                        retry_count=retry_count, pause=pause)
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
         else:
             return data
     raise IOError(ct.NETWORK_URL_ERROR_MSG)
@@ -749,8 +707,8 @@ def sz_margins(start=None, end=None, retry_count=3, pause=0.001):
         else:
             ct._write_head()
             for date in date_range:
-                data = data.append(_sz_hz(str(date.date()), retry_count, pause) )
-    except:
+                data = pd.concat([data, _sz_hz(str(date.date()), retry_count, pause)])
+    except Exception:
         ct._write_msg(ct.DATA_INPUT_ERROR_MSG)
     else:
         return data
@@ -770,7 +728,7 @@ def _sz_hz(date='', retry_count=3, pause=0.001):
             df.columns = rv.MAR_SZ_HZ_COLS
             df['opDate'] = date
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
         else:
             return df
     raise IOError(ct.NETWORK_URL_ERROR_MSG)
@@ -814,7 +772,7 @@ def sz_margin_details(date='', retry_count=3, pause=0.001):
             df['stockCode'] = df['stockCode'].map(lambda x:str(x).zfill(6))
             df['opDate'] = date
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
         else:
             return df
     raise IOError(ct.NETWORK_URL_ERROR_MSG)
@@ -836,7 +794,7 @@ def top10_holders(code=None, year=None, quarter=None, gdtype='0',
             request = Request(rv.TOP10_HOLDERS_URL%(ct.P_TYPE['http'], ct.DOMAINS['gw'],
                                     gdtype, code.upper()))
             lines = urlopen(request, timeout = 10).read()
-            lines = lines.decode('utf8') if ct.PY3 else lines
+            lines = lines.decode('utf8')
             reg = re.compile(r'= \'\[(.*?)\]\';')
             lines = reg.findall(lines)[0]
             jss = json.loads('[%s]' %lines)
@@ -859,13 +817,13 @@ def top10_holders(code=None, year=None, quarter=None, gdtype='0',
                     status = inrow['zjqk']
                     dlist.append([qt, name, hold, h_pro, sharetype, status])
                 ddata = pd.DataFrame(dlist, columns=rv.TOP10_PER_COLS)
-                data = data.append(ddata, ignore_index=True)
+                data = pd.concat([data, ddata], ignore_index=True)
             df = pd.DataFrame(summ, columns=rv.TOP10_SUMM_COLS)
             if qdate != '':
                 df = df[df.quarter == qdate]
                 data = data[data.quarter == qdate]
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
         else:
             return df, data
     raise IOError(ct.NETWORK_URL_ERROR_MSG)
@@ -888,7 +846,7 @@ def moneyflow_hsgt():
     clt = Client(rv.HSGT_DATA%(ct.P_TYPE['http'], ct.DOMAINS['em']), 
                         ref=rv.HSGT_REF%(ct.P_TYPE['http'], ct.DOMAINS['em'], ct.PAGES['index']))
     content = clt.gvalue()
-    content = content.decode('utf-8') if ct.PY3 else content
+    content = content.decode('utf-8')
     js = json.loads(content)
     df = pd.DataFrame(js)
     df['DateTime'] = df['DateTime'].map(lambda x: x[0:10])

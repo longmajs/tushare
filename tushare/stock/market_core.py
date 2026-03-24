@@ -342,56 +342,75 @@ def fetch_tencent_k_data(code=None, start="", end="", ktype="D", autype="qfq", i
         return df
 
     period = ct.TT_K_TYPE[ktype]
-    url = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
     adj_param = "" if adj in (None, "") else adj
-    var_suffix = adj_param if adj_param else "raw"
-    params = {
-        "_var": "kline_%s_%s" % (period, var_suffix),
-        "param": "%s,%s,%s,%s,640,%s" % (symbol, period, start or "", end or "", adj_param),
-        "r": "0.%s" % random.randint(10**15, 10**16 - 1),
-    }
-    text = _client().get_text(
-        url,
-        params=params,
-        ttl=_CONFIG.cache_ttl["kline_daily"],
-        cache_key="raw:%s" % cache_key,
-        source="tencent",
-        endpoint="fqkline",
-    )
-    payload = _parse_json_assignment(text)
-    data_obj = payload.get("data", {}).get(symbol)
-    if not data_obj:
-        raise ParseError("unexpected payload, missing symbol=%s" % symbol)
 
-    candidate_keys = []
-    if adj_param:
-        candidate_keys.append("%s%s" % (adj_param, period))
-    candidate_keys.extend([period, "qfq%s" % period, "hfq%s" % period])
+    # Build request list — chunk by 2-year windows to avoid the ~640 bar cap.
+    if start and end:
+        year_starts = du.tt_dates(start, end)
+    else:
+        year_starts = [None]
 
-    rows = None
-    for key in candidate_keys:
-        if key in data_obj and isinstance(data_obj.get(key), list):
-            rows = data_obj.get(key)
-            break
-    if rows is None:
-        # pick first list value as resilient fallback
-        for _, value in data_obj.items():
-            if isinstance(value, list):
-                rows = value
+    all_frames = []
+    for yr in year_starts:
+        if yr is not None:
+            chunk_start = "%s-01-01" % yr
+            chunk_end = "%s-12-31" % (yr + 1)
+        else:
+            chunk_start = start or ""
+            chunk_end = end or ""
+
+        var_suffix = adj_param if adj_param else "raw"
+        chunk_cache_key = _kline_cache_key(symbol, ktype, adj, chunk_start, chunk_end)
+        url = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
+        params = {
+            "_var": "kline_%s_%s" % (period, var_suffix),
+            "param": "%s,%s,%s,%s,640,%s" % (symbol, period, chunk_start, chunk_end, adj_param),
+            "r": "0.%s" % random.randint(10**15, 10**16 - 1),
+        }
+        text = _client().get_text(
+            url,
+            params=params,
+            ttl=_CONFIG.cache_ttl["kline_daily"],
+            cache_key="raw:%s" % chunk_cache_key,
+            source="tencent",
+            endpoint="fqkline",
+        )
+        payload = _parse_json_assignment(text)
+        data_obj = payload.get("data", {}).get(symbol)
+        if not data_obj:
+            continue
+
+        candidate_keys = []
+        if adj_param:
+            candidate_keys.append("%s%s" % (adj_param, period))
+        candidate_keys.extend([period, "qfq%s" % period, "hfq%s" % period])
+
+        rows = None
+        for key in candidate_keys:
+            if key in data_obj and isinstance(data_obj.get(key), list):
+                rows = data_obj.get(key)
                 break
-    if not rows:
+        if rows is None:
+            for _, value in data_obj.items():
+                if isinstance(value, list):
+                    rows = value
+                    break
+        if rows:
+            cols = ct.KLINE_TT_COLS_MINS if len(rows[0]) == 6 else ct.KLINE_TT_COLS
+            chunk_df = pd.DataFrame(rows, columns=cols)
+            chunk_df["code"] = symbol if index else code
+            for col in ["open", "close", "high", "low", "volume"]:
+                chunk_df[col] = pd.to_numeric(chunk_df[col], errors="coerce")
+            if "amount" in chunk_df.columns:
+                chunk_df["amount"] = pd.to_numeric(chunk_df["amount"], errors="coerce")
+            if "turnoverratio" in chunk_df.columns:
+                chunk_df["turnoverratio"] = pd.to_numeric(chunk_df["turnoverratio"], errors="coerce")
+            all_frames.append(chunk_df)
+
+    if not all_frames:
         return pd.DataFrame(columns=ct.KLINE_TT_COLS + ["code"])
-
-    cols = ct.KLINE_TT_COLS_MINS if len(rows[0]) == 6 else ct.KLINE_TT_COLS
-    df = pd.DataFrame(rows, columns=cols)
-    df["code"] = symbol if index else code
-    for col in ["open", "close", "high", "low", "volume"]:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
-    if "amount" in df.columns:
-        df["amount"] = pd.to_numeric(df["amount"], errors="coerce")
-    if "turnoverratio" in df.columns:
-        df["turnoverratio"] = pd.to_numeric(df["turnoverratio"], errors="coerce")
-
+    df = pd.concat(all_frames, ignore_index=True)
+    df = df.drop_duplicates(subset=["date"], keep="first")
     if start and end:
         df = df[(df["date"] >= start) & (df["date"] <= end)]
     _client().cache.set(cache_key, df, cache_ttl)
@@ -474,6 +493,24 @@ def fetch_sina_realtime_quotes(symbols=None):
 import re
 
 
+def _safe_json_loads(text):
+    """Parse JSON, falling back to JS-style object handling."""
+    text = text.strip()
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        pass
+    # Strip wrapping chars (e.g. parentheses from JSONP-like responses).
+    if text and text[0] in ("(", ")") or text[-1] in ("(", ")"):
+        text = text.strip("()")
+    # Strip var assignment prefix.
+    if "=" in text and text[0] not in "[{":
+        text = text.split("=", 1)[1].strip().rstrip(";")
+    # Quote unquoted JS-style keys: {key: value} -> {"key": value}
+    text = re.sub(r'(?<=[{,])\s*(\w+)\s*:', r' "\1":', text)
+    return json.loads(text)
+
+
 def _fetch_today_all_node(node: str, max_pages: int = 200) -> pd.DataFrame:
     frames = []
     for page in range(1, max_pages + 1):
@@ -503,7 +540,7 @@ def _fetch_today_all_node(node: str, max_pages: int = 200) -> pd.DataFrame:
         if not text or text == "null":
             break
         try:
-            payload = json.loads(text)
+            payload = _safe_json_loads(text)
         except Exception as exc:
             raise ParseError("today_all page=%s parse failed: %s" % (page, exc))
         if not payload:
@@ -569,7 +606,7 @@ def fetch_today_ticks(code=None, date=None, retry_count=3, pause=0.001):
         endpoint="CN_Transactions.getAllPageTime",
     )
     try:
-        payload = json.loads(text)
+        payload = _safe_json_loads(text)
     except Exception as exc:
         raise ParseError("today ticks page parser failed: %s" % exc)
     if isinstance(payload, dict):

@@ -119,7 +119,6 @@ DICT_NAV_MONETARY = {
 }
 
 import sys
-PY3 = (sys.version_info[0] >= 3)
 
 
 def _write_head():

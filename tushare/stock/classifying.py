@@ -17,12 +17,11 @@ import time
 import tushare.stock.fundamental as fd
 from tushare.util.netbase import Client
 
-try:
-    from urllib.request import urlopen, Request
-    from urllib.error import URLError, HTTPError
-except ImportError:
-    from urllib2 import urlopen, Request
-    from urllib2 import URLError, HTTPError
+from urllib.request import urlopen, Request
+from urllib.error import URLError, HTTPError
+import logging
+LOG = logging.getLogger("tushare.classifying")
+
 
 _NETWORK_ERROR_CLASSES = (URLError, HTTPError, OSError)
 
@@ -106,7 +105,7 @@ def get_concepts(src='dfcf'):
     clt = Client(ct.ET_CONCEPTS_INDEX_URL%(ct.P_TYPE['http'],
                                                     ct.DOMAINS['dfcf'], _random(15)), ref='')
     content = clt.gvalue()
-    content = content.decode('utf-8') if ct.PY3 else content
+    content = content.decode('utf-8')
     js = json.loads(content)
     data = []
     for row in js:
@@ -230,7 +229,7 @@ def _get_type_data(url):
                           columns=['tag', 'name'])
         return df
     except Exception as er:
-        print(str(er))
+        LOG.warning("%s", er)
 
 
 def get_hs300s():
@@ -251,7 +250,7 @@ def get_hs300s():
         wt['code'] = wt['code'].map(lambda x :str(x).zfill(6))
         return wt
     except Exception as er:
-        print(str(er))
+        LOG.warning("%s", er)
 
 
 def get_sz50s():
@@ -266,12 +265,12 @@ def get_sz50s():
     """
     try:
         df = pd.read_excel(ct.SZ_CLASSIFY_URL_FTP%(ct.P_TYPE['http'], ct.DOMAINS['idx'], 
-                                                  ct.PAGES['sz50b']), parse_cols=[0, 4, 5])
+                                                  ct.PAGES['sz50b']), usecols=[0, 4, 5])
         df.columns = ct.FOR_CLASSIFY_B_COLS
         df['code'] = df['code'].map(lambda x :str(x).zfill(6))
         return df
     except Exception as er:
-        print(str(er))      
+        LOG.warning("%s", er)      
 
 
 def get_zz500s():
@@ -292,7 +291,7 @@ def get_zz500s():
         wt['code'] = wt['code'].map(lambda x :str(x).zfill(6))
         return wt
     except Exception as er:
-        print(str(er)) 
+        LOG.warning("%s", er) 
 
 
 def get_terminated():
@@ -313,14 +312,14 @@ def get_terminated():
                                     ct.PAGES['ssecq'], _random(5),
                                     _random()), ref=ref, cookie=rv.MAR_SH_COOKIESTR)
         lines = clt.gvalue()
-        lines = lines.decode('utf-8') if ct.PY3 else lines
+        lines = lines.decode('utf-8')
         lines = lines[19:-1]
         lines = json.loads(lines)
         df = pd.DataFrame(lines['result'], columns=rv.TERMINATED_T_COLS)
         df.columns = rv.TERMINATED_COLS
         return df
     except Exception as er:
-        print(str(er))      
+        LOG.warning("%s", er)      
 
 
 def get_suspended():
@@ -341,14 +340,14 @@ def get_suspended():
                                     ct.PAGES['ssecq'], _random(5),
                                     _random()), ref=ref, cookie=rv.MAR_SH_COOKIESTR)
         lines = clt.gvalue()
-        lines = lines.decode('utf-8') if ct.PY3 else lines
+        lines = lines.decode('utf-8')
         lines = lines[19:-1]
         lines = json.loads(lines)
         df = pd.DataFrame(lines['result'], columns=rv.TERMINATED_T_COLS)
         df.columns = rv.TERMINATED_COLS
         return df
     except Exception as er:
-        print(str(er))   
+        LOG.warning("%s", er)   
             
 
 

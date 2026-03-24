@@ -1,11 +1,6 @@
 # -*- coding:utf-8 -*- 
 
-try:
-    from urllib.request import urlopen, Request
-except ImportError:
-    from urllib2 import urlopen, Request
-
-
+from urllib.request import urlopen, Request
 class Client(object):
     def __init__(self, url=None, ref=None, cookie=None):
         self._ref = ref

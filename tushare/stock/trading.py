@@ -16,6 +16,7 @@ import pandas as pd
 import numpy as np
 import datetime
 from tushare.stock import cons as ct
+from tushare.stock.market_core import _safe_json_loads
 import re
 from io import StringIO
 import warnings
@@ -37,11 +38,9 @@ from tushare.stock.market_core import (
     is_legacy_mode,
     set_market_config as _set_market_config,
 )
-try:
-    from urllib.request import urlopen, Request
-except ImportError:
-    from urllib2 import urlopen, Request
-
+from urllib.request import urlopen, Request
+import logging
+LOG = logging.getLogger("tushare.trading")
 
 def _legacy_get_hist_data(code=None, start=None, end=None,
                   ktype='D', retry_count=3,
@@ -86,9 +85,9 @@ def _legacy_get_hist_data(code=None, start=None, end=None,
             if len(lines) < 15: #no data
                 return None
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
         else:
-            js = json.loads(lines.decode('utf-8') if ct.PY3 else lines)
+            js = json.loads(lines.decode('utf-8'))
             cols = []
             if (code in ct.INDEX_LABELS) & (ktype.upper() in ct.K_LABELS):
                 cols = ct.INX_DAY_PRICE_COLUMNS
@@ -98,7 +97,8 @@ def _legacy_get_hist_data(code=None, start=None, end=None,
                 cols = ct.INX_DAY_PRICE_COLUMNS
             df = pd.DataFrame(js['record'], columns=cols)
             if ktype.upper() in ['D', 'W', 'M']:
-                df = df.applymap(lambda x: x.replace(u',', u''))
+                _map = getattr(df, 'map', df.applymap)
+                df = _map(lambda x: x.replace(u',', u''))
                 df[df==''] = 0
             for col in cols[1:]:
                 df[col] = df[col].astype(float)
@@ -131,13 +131,10 @@ def _parsing_dayprice_json(types=None, page=1):
     if text == 'null':
         return None
     reg = re.compile(r'\,(.*?)\:') 
-    text = reg.sub(r',"\1":', text.decode('gbk') if ct.PY3 else text) 
+    text = reg.sub(r',"\1":', text.decode('gbk'))
     text = text.replace('"{symbol', '{"symbol')
     text = text.replace('{symbol', '{"symbol"')
-    if ct.PY3:
-        jstr = json.dumps(text)
-    else:
-        jstr = json.dumps(text, encoding='GBK')
+    jstr = json.dumps(text)
     js = json.loads(jstr)
     df = pd.DataFrame(pd.read_json(js, dtype={'code':object}),
                       columns=ct.DAY_TRADING_COLUMNS)
@@ -195,7 +192,7 @@ def _legacy_get_tick_data(code=None, date=None, retry_count=3, pause=0.001,
                 df = pd.read_table(StringIO(lines), names=ct.TICK_COLUMNS,
                                    skiprows=[0])      
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
         else:
             return df
     raise IOError(ct.NETWORK_URL_ERROR_MSG)
@@ -237,7 +234,7 @@ def get_sina_dd(code=None, date=None, vol=400, retry_count=3, pause=0.001):
             if df is not None:
                 df['code'] = df['code'].map(lambda x: x[2:])
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
         else:
             return df
     raise IOError(ct.NETWORK_URL_ERROR_MSG)
@@ -272,10 +269,7 @@ def _legacy_get_today_ticks(code=None, retry_count=3, pause=0.001):
             data_str = urlopen(request, timeout=10).read()
             data_str = data_str.decode('GBK')
             data_str = data_str[1:-1]
-            data_str = eval(data_str, type('Dummy', (dict,), 
-                                           dict(__getitem__ = lambda s, n:n))())
-            data_str = json.dumps(data_str)
-            data_str = json.loads(data_str)
+            data_str = _safe_json_loads(data_str)
             pages = len(data_str['detailPages'])
             data = pd.DataFrame()
             ct._write_head()
@@ -284,7 +278,7 @@ def _legacy_get_today_ticks(code=None, retry_count=3, pause=0.001):
                 if piece is not None and not piece.empty:
                     data = pd.concat([data, piece], ignore_index=True)
         except Exception as er:
-            print(str(er))
+            LOG.warning("%s", er)
         else:
             return data
     raise IOError(ct.NETWORK_URL_ERROR_MSG)
@@ -300,10 +294,7 @@ def _today_ticks(symbol, tdate, pageNo, retry_count, pause):
                                                          symbol, tdate, pageNo
                                 ))  
             res = html.xpath('//table[@id=\"datatbl\"]/tbody/tr')
-            if ct.PY3:
-                sarr = [etree.tostring(node).decode('utf-8') for node in res]
-            else:
-                sarr = [etree.tostring(node) for node in res]
+            sarr = [etree.tostring(node).decode('utf-8') for node in res]
             sarr = ''.join(sarr)
             sarr = '<table>%s</table>'%sarr
             sarr = sarr.replace('--', '0')
@@ -311,7 +302,7 @@ def _today_ticks(symbol, tdate, pageNo, retry_count, pause):
             df.columns = ct.TODAY_TICK_COLUMNS
             df['pchange'] = df['pchange'].map(lambda x : x.replace('%', ''))
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
         else:
             return df
     raise IOError(ct.NETWORK_URL_ERROR_MSG)
@@ -529,7 +520,7 @@ def _parase_fq_factor(code, start, end):
                                              ct.DOMAINS['vsf'], symbol))
     text = urlopen(request, timeout=10).read()
     text = text[1:len(text)-1]
-    text = text.decode('utf-8') if ct.PY3 else text
+    text = text.decode('utf-8')
     text = text.replace('{_', '{"')
     text = text.replace('total', '"total"')
     text = text.replace('data', '"data"')
@@ -562,10 +553,7 @@ def _parse_fq_data(url, index, retry_count, pause):
             text = text.decode('GBK')
             html = lxml.html.parse(StringIO(text))
             res = html.xpath('//table[@id=\"FundHoldSharesTable\"]')
-            if ct.PY3:
-                sarr = [etree.tostring(node).decode('utf-8') for node in res]
-            else:
-                sarr = [etree.tostring(node) for node in res]
+            sarr = [etree.tostring(node).decode('utf-8') for node in res]
             sarr = ''.join(sarr)
             if sarr == '':
                 return None
@@ -583,7 +571,7 @@ def _parse_fq_data(url, index, retry_count, pause):
             # 时间较早，已经读不到数据
             return None
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
         else:
             return df
     raise IOError(ct.NETWORK_URL_ERROR_MSG)
@@ -737,9 +725,9 @@ def _get_k_data(url, dataflag='',
                 if len(lines) < 100: #no data
                     return None
             except Exception as e:
-                print(e)
+                LOG.warning("%s", e)
             else:
-                lines = lines.decode('utf-8') if ct.PY3 else lines
+                lines = lines.decode('utf-8')
                 lines = lines.split('=')[1]
                 reg = re.compile(r',{"nd.*?}') 
                 lines = re.subn(reg, '', lines) 
@@ -1048,7 +1036,7 @@ def bar(code, conn=None, start_date=None, end_date=None, freq='D', asset='E',
             data['p_change'] = data['close'].pct_change(-1) * 100
             data['p_change'] = data['p_change'].map(ct.FORMAT).astype(float)
             return data
-        except:
+        except Exception:
             return None
         else:
             data['p_change'] = data['close'].pct_change(-1) * 100
@@ -1153,7 +1141,7 @@ def tick(code, conn=None, date='', asset='E', market='', retry_count = 3):
                     data = data.drop(['hour', 'minute', 'nature_name', 'zengcang', 'direction', 'nature'], axis=1)
             
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
         else:
             return data
 
@@ -1207,7 +1195,7 @@ def quotes(symbols, conn=None, asset='E', market=[], retry_count = 3):
             else:
                 data = data.drop(['market'], axis=1)
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
         else:
             return data
     raise IOError(ct.NETWORK_URL_ERROR_MSG)

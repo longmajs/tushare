@@ -7,8 +7,10 @@ Created on 2015/02/04
 """
 import pandas as pd
 import tushare as ts
-from pandas import compat
 import os
+import logging
+LOG = logging.getLogger("tushare.store")
+
 
 
 class Store(object):
@@ -27,7 +29,7 @@ class Store(object):
         if path is None:
             path = self.path
         file_path = '%s%s%s.%s'
-        if isinstance(name, compat.string_types) and name is not '':
+        if isinstance(name, str) and name != '':
             if (path is None) or (path == ''):
                 file_path = '.'.join([name, to])
             else:
@@ -35,7 +37,7 @@ class Store(object):
                     if os.path.exists(path) is False:
                         os.mkdir(path) 
                     file_path = file_path%(path, '/', name, to)
-                except:
+                except Exception:
                     pass
             
         else:

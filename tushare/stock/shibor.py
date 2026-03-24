@@ -12,6 +12,9 @@ from tushare.stock import cons as ct
 from tushare.util import dateu as du
 from tushare.util.netbase import Client
 from io import StringIO
+import logging
+LOG = logging.getLogger("tushare.shibor")
+
 
 def shibor_data(year=None):
     """
@@ -34,7 +37,7 @@ def shibor_data(year=None):
     """
     year = du.get_year() if year is None else year
     lab = ct.SHIBOR_TYPE['Shibor']
-    lab = lab.encode('utf-8') if ct.PY3 else lab
+    lab = lab.encode('utf-8')
     try:
         clt = Client(url=ct.SHIBOR_DATA_URL%(ct.P_TYPE['http'], ct.DOMAINS['shibor'],
                                                ct.PAGES['dw'], 'Shibor',
@@ -49,7 +52,7 @@ def shibor_data(year=None):
         else:
             df['date'] = df['date'].astype('datetime64[D]')
         return df
-    except:
+    except Exception:
         return None
 
 def shibor_quote_data(year=None):
@@ -83,7 +86,7 @@ def shibor_quote_data(year=None):
     """
     year = du.get_year() if year is None else year
     lab = ct.SHIBOR_TYPE['Quote']
-    lab = lab.encode('utf-8') if ct.PY3 else lab
+    lab = lab.encode('utf-8')
     try:
         clt = Client(url=ct.SHIBOR_DATA_URL%(ct.P_TYPE['http'], ct.DOMAINS['shibor'],
                                                ct.PAGES['dw'], 'Quote',
@@ -99,7 +102,7 @@ def shibor_quote_data(year=None):
         else:
             df['date'] = df['date'].astype('datetime64[D]')
         return df
-    except:
+    except Exception:
         return None
 
 def shibor_ma_data(year=None):
@@ -116,7 +119,7 @@ def shibor_ma_data(year=None):
     """
     year = du.get_year() if year is None else year
     lab = ct.SHIBOR_TYPE['Tendency']
-    lab = lab.encode('utf-8') if ct.PY3 else lab
+    lab = lab.encode('utf-8')
     try:
         clt = Client(url=ct.SHIBOR_DATA_URL%(ct.P_TYPE['http'], ct.DOMAINS['shibor'],
                                                ct.PAGES['dw'], 'Shibor_Tendency',
@@ -131,7 +134,7 @@ def shibor_ma_data(year=None):
         else:
             df['date'] = df['date'].astype('datetime64[D]')
         return df
-    except:
+    except Exception:
         return None
 
 
@@ -149,7 +152,7 @@ def lpr_data(year=None):
     """
     year = du.get_year() if year is None else year
     lab = ct.SHIBOR_TYPE['LPR']
-    lab = lab.encode('utf-8') if ct.PY3 else lab
+    lab = lab.encode('utf-8')
     try:
         clt = Client(url=ct.SHIBOR_DATA_URL%(ct.P_TYPE['http'], ct.DOMAINS['shibor'],
                                                ct.PAGES['dw'], 'LPR',
@@ -164,7 +167,7 @@ def lpr_data(year=None):
         else:
             df['date'] = df['date'].astype('datetime64[D]')
         return df
-    except:
+    except Exception:
         return None
     
 
@@ -184,7 +187,7 @@ def lpr_ma_data(year=None):
     """
     year = du.get_year() if year is None else year
     lab = ct.SHIBOR_TYPE['LPR_Tendency']
-    lab = lab.encode('utf-8') if ct.PY3 else lab
+    lab = lab.encode('utf-8')
     try:
         clt = Client(url=ct.SHIBOR_DATA_URL%(ct.P_TYPE['http'], ct.DOMAINS['shibor'],
                                                ct.PAGES['dw'], 'LPR_Tendency',
@@ -199,7 +202,7 @@ def lpr_ma_data(year=None):
         else:
             df['date'] = df['date'].astype('datetime64[D]')
         return df
-    except:
+    except Exception:
         return None
     
     

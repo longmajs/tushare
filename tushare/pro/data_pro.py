@@ -9,6 +9,9 @@ Created on 2018/07/01
 from tushare.pro import client
 from tushare.util import upass
 from tushare.util.formula import MA
+import logging
+LOG = logging.getLogger("tushare.pro")
+
 
 PRICE_COLS = ['open', 'close', 'high', 'low', 'pre_close']
 FORMAT = lambda x: '%.2f' % x
@@ -133,7 +136,7 @@ def pro_bar(ts_code='', pro_api=None, start_date=None, end_date=None, freq='D', 
                         data['ma_v_%s'%a] = data['ma_v_%s'%a].astype(float)
             return data
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
             return None
         else:
             return 

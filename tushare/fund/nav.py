@@ -16,10 +16,9 @@ import pandas as pd
 import numpy as np
 from tushare.fund import cons as ct
 from tushare.util import dateu as du
-try:
-    from urllib.request import urlopen, Request
-except ImportError:
-    from urllib2 import urlopen, Request
+from urllib.request import urlopen, Request
+import logging
+LOG = logging.getLogger("tushare.fund")
 
 
 def get_nav_open(fund_type='all'):
@@ -222,7 +221,7 @@ def get_nav_history(code, start=None, end=None, retry_count=3, pause=0.001, time
     ismonetary = False  # 是否是债券型和货币型基金
     df_fund = get_fund_info(code)
 
-    fund_type = df_fund.ix[0]['Type2Name']
+    fund_type = df_fund.iloc[0]['Type2Name']
     if (fund_type.find(u'债券型') != -1) or (fund_type.find(u'货币型') != -1):
         ismonetary = True
 
@@ -288,23 +287,20 @@ def _parse_fund_data(url, fund_type='open'):
         text = urlopen(request, timeout=10).read()
         if text == 'null':
             return None
-        text = text.decode('gbk') if ct.PY3 else text
+        text = text.decode('gbk')
         text = text.split('data:')[1].split(',exec_time')[0]
         reg = re.compile(r'\,(.*?)\:')
         text = reg.sub(r',"\1":', text)
         text = text.replace('"{symbol', '{"symbol')
         text = text.replace('{symbol', '{"symbol"')
-        if ct.PY3:
-            jstr = json.dumps(text)
-        else:
-            jstr = json.dumps(text, encoding='gbk')
+        jstr = json.dumps(text)
         org_js = json.loads(jstr)
         fund_df = pd.DataFrame(pd.read_json(org_js, dtype={'symbol': object}),
                                columns=ct.NAV_COLUMNS[fund_type])
         fund_df.fillna(0, inplace=True)
         return fund_df
     except Exception as er:
-        print(str(er))
+        LOG.warning("%s", er)
 
 
 def _get_fund_num(url):
@@ -329,7 +325,7 @@ def _get_fund_num(url):
         nums = org_js["total_num"]
         return int(nums)
     except Exception as er:
-        print(str(er))
+        LOG.warning("%s", er)
 
 
 def _get_nav_histroy_num(code, start, end, ismonetary=False):

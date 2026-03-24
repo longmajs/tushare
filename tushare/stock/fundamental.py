@@ -14,10 +14,10 @@ import re
 import time
 from io import StringIO
 from tushare.util import dateu as du
-try:
-    from urllib.request import urlopen, Request
-except ImportError:
-    from urllib2 import urlopen, Request
+from urllib.request import urlopen, Request
+import logging
+LOG = logging.getLogger("tushare.fundamental")
+
 
 def get_stock_basics(date=None):
     """
@@ -105,16 +105,13 @@ def _get_report_data(year, quarter, pageNo, dataArr,
             text = text.replace('--', '')
             html = lxml.html.parse(StringIO(text))
             res = html.xpath("//table[@class=\"list_table\"]/tr")
-            if ct.PY3:
-                sarr = [etree.tostring(node).decode('utf-8') for node in res]
-            else:
-                sarr = [etree.tostring(node) for node in res]
+            sarr = [etree.tostring(node).decode('utf-8') for node in res]
             sarr = ''.join(sarr)
             sarr = '<table>%s</table>'%sarr
             df = pd.read_html(sarr)[0]
             df = df.drop(11, axis=1)
             df.columns = ct.REPORT_COLS
-            dataArr = dataArr.append(df, ignore_index=True)
+            dataArr = pd.concat([dataArr, df], ignore_index=True)
             nextPage = html.xpath('//div[@class=\"pages\"]/a[last()]/@onclick')
             if len(nextPage)>0:
                 pageNo = re.findall(r'\d+', nextPage[0])[0]
@@ -171,22 +168,19 @@ def _get_profit_data(year, quarter, pageNo, dataArr,
             text = text.replace('--', '')
             html = lxml.html.parse(StringIO(text))
             res = html.xpath("//table[@class=\"list_table\"]/tr")
-            if ct.PY3:
-                sarr = [etree.tostring(node).decode('utf-8') for node in res]
-            else:
-                sarr = [etree.tostring(node) for node in res]
+            sarr = [etree.tostring(node).decode('utf-8') for node in res]
             sarr = ''.join(sarr)
             sarr = '<table>%s</table>'%sarr
             df = pd.read_html(sarr)[0]
             df.columns=ct.PROFIT_COLS
-            dataArr = dataArr.append(df, ignore_index=True)
+            dataArr = pd.concat([dataArr, df], ignore_index=True)
             nextPage = html.xpath('//div[@class=\"pages\"]/a[last()]/@onclick')
             if len(nextPage)>0:
                 pageNo = re.findall(r'\d+', nextPage[0])[0]
                 return _get_profit_data(year, quarter, pageNo, dataArr)
             else:
                 return dataArr
-        except:
+        except Exception:
             pass
     raise IOError(ct.NETWORK_URL_ERROR_MSG)
 
@@ -235,15 +229,12 @@ def _get_operation_data(year, quarter, pageNo, dataArr,
             text = text.replace('--', '')
             html = lxml.html.parse(StringIO(text))
             res = html.xpath("//table[@class=\"list_table\"]/tr")
-            if ct.PY3:
-                sarr = [etree.tostring(node).decode('utf-8') for node in res]
-            else:
-                sarr = [etree.tostring(node) for node in res]
+            sarr = [etree.tostring(node).decode('utf-8') for node in res]
             sarr = ''.join(sarr)
             sarr = '<table>%s</table>'%sarr
             df = pd.read_html(sarr)[0]
             df.columns=ct.OPERATION_COLS
-            dataArr = dataArr.append(df, ignore_index=True)
+            dataArr = pd.concat([dataArr, df], ignore_index=True)
             nextPage = html.xpath('//div[@class=\"pages\"]/a[last()]/@onclick')
             if len(nextPage)>0:
                 pageNo = re.findall(r'\d+', nextPage[0])[0]
@@ -299,15 +290,12 @@ def _get_growth_data(year, quarter, pageNo, dataArr,
             text = text.replace('--', '')
             html = lxml.html.parse(StringIO(text))
             res = html.xpath("//table[@class=\"list_table\"]/tr")
-            if ct.PY3:
-                sarr = [etree.tostring(node).decode('utf-8') for node in res]
-            else:
-                sarr = [etree.tostring(node) for node in res]
+            sarr = [etree.tostring(node).decode('utf-8') for node in res]
             sarr = ''.join(sarr)
             sarr = '<table>%s</table>'%sarr
             df = pd.read_html(sarr)[0]
             df.columns=ct.GROWTH_COLS
-            dataArr = dataArr.append(df, ignore_index=True)
+            dataArr = pd.concat([dataArr, df], ignore_index=True)
             nextPage = html.xpath('//div[@class=\"pages\"]/a[last()]/@onclick')
             if len(nextPage)>0:
                 pageNo = re.findall(r'\d+', nextPage[0])[0]
@@ -362,15 +350,12 @@ def _get_debtpaying_data(year, quarter, pageNo, dataArr,
             text = text.decode('GBK')
             html = lxml.html.parse(StringIO(text))
             res = html.xpath("//table[@class=\"list_table\"]/tr")
-            if ct.PY3:
-                sarr = [etree.tostring(node).decode('utf-8') for node in res]
-            else:
-                sarr = [etree.tostring(node) for node in res]
+            sarr = [etree.tostring(node).decode('utf-8') for node in res]
             sarr = ''.join(sarr)
             sarr = '<table>%s</table>'%sarr
             df = pd.read_html(sarr)[0]
             df.columns = ct.DEBTPAYING_COLS
-            dataArr = dataArr.append(df, ignore_index=True)
+            dataArr = pd.concat([dataArr, df], ignore_index=True)
             nextPage = html.xpath('//div[@class=\"pages\"]/a[last()]/@onclick')
             if len(nextPage)>0:
                 pageNo = re.findall(r'\d+', nextPage[0])[0]
@@ -425,15 +410,12 @@ def _get_cashflow_data(year, quarter, pageNo, dataArr,
             text = text.replace('--', '')
             html = lxml.html.parse(StringIO(text))
             res = html.xpath("//table[@class=\"list_table\"]/tr")
-            if ct.PY3:
-                sarr = [etree.tostring(node).decode('utf-8') for node in res]
-            else:
-                sarr = [etree.tostring(node) for node in res]
+            sarr = [etree.tostring(node).decode('utf-8') for node in res]
             sarr = ''.join(sarr)
             sarr = '<table>%s</table>'%sarr
             df = pd.read_html(sarr)[0]
             df.columns = ct.CASHFLOW_COLS
-            dataArr = dataArr.append(df, ignore_index=True)
+            dataArr = pd.concat([dataArr, df], ignore_index=True)
             nextPage = html.xpath('//div[@class=\"pages\"]/a[last()]/@onclick')
             if len(nextPage)>0:
                 pageNo = re.findall(r'\d+', nextPage[0])[0]

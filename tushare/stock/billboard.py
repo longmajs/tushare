@@ -11,6 +11,7 @@ Created on 2015年6月10日
 import pandas as pd
 from io import StringIO
 from tushare.stock import cons as ct
+from tushare.stock.market_core import _safe_json_loads
 import numpy as np
 import time
 import json
@@ -19,10 +20,9 @@ import lxml.html
 from lxml import etree
 from tushare.util import dateu as du
 from tushare.stock import ref_vars as rv
-try:
-    from urllib.request import urlopen, Request
-except ImportError:
-    from urllib2 import urlopen, Request
+from urllib.request import urlopen, Request
+import logging
+LOG = logging.getLogger("tushare.billboard")
 
 
 def top_list(date = None, retry_count=3, pause=0.001):
@@ -66,10 +66,7 @@ def top_list(date = None, retry_count=3, pause=0.001):
             text = urlopen(request, timeout=10).read()
             text = text.decode('GBK')
             text = text.split('_1=')[1]
-            text = eval(text, type('Dummy', (dict,), 
-                                           dict(__getitem__ = lambda s, n:n))())
-            text = json.dumps(text)
-            text = json.loads(text)
+            text = _safe_json_loads(text)
             df = pd.DataFrame(text['data'], columns=rv.LHB_TMP_COLS)
             df.columns = rv.LHB_COLS
             df = df.fillna(0)
@@ -89,7 +86,7 @@ def top_list(date = None, retry_count=3, pause=0.001):
                 df[col] = df[col].map(ct.FORMAT)
             df = df.drop('Turnover', axis=1)
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
         else:
             return df
     raise IOError(ct.NETWORK_URL_ERROR_MSG)
@@ -140,15 +137,12 @@ def _cap_tops(last=5, pageNo=1, retry_count=3, pause=0.001, dataArr=pd.DataFrame
             text = text.decode('GBK')
             html = lxml.html.parse(StringIO(text))
             res = html.xpath("//table[@id=\"dataTable\"]/tr")
-            if ct.PY3:
-                sarr = [etree.tostring(node).decode('utf-8') for node in res]
-            else:
-                sarr = [etree.tostring(node) for node in res]
+            sarr = [etree.tostring(node).decode('utf-8') for node in res]
             sarr = ''.join(sarr)
             sarr = '<table>%s</table>'%sarr
             df = pd.read_html(sarr)[0]
             df.columns = rv.LHB_GGTJ_COLS
-            dataArr = dataArr.append(df, ignore_index=True)
+            dataArr = pd.concat([dataArr, df], ignore_index=True)
             nextPage = html.xpath('//div[@class=\"pages\"]/a[last()]/@onclick')
             if len(nextPage)>0:
                 pageNo = re.findall(r'\d+', nextPage[0])[0]
@@ -156,7 +150,7 @@ def _cap_tops(last=5, pageNo=1, retry_count=3, pause=0.001, dataArr=pd.DataFrame
             else:
                 return dataArr
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
             
 
 def broker_tops(days= 5, retry_count= 3, pause= 0.001):
@@ -198,15 +192,12 @@ def _broker_tops(last=5, pageNo=1, retry_count=3, pause=0.001, dataArr=pd.DataFr
             text = text.decode('GBK')
             html = lxml.html.parse(StringIO(text))
             res = html.xpath("//table[@id=\"dataTable\"]/tr")
-            if ct.PY3:
-                sarr = [etree.tostring(node).decode('utf-8') for node in res]
-            else:
-                sarr = [etree.tostring(node) for node in res]
+            sarr = [etree.tostring(node).decode('utf-8') for node in res]
             sarr = ''.join(sarr)
             sarr = '<table>%s</table>'%sarr
             df = pd.read_html(sarr)[0]
             df.columns = rv.LHB_YYTJ_COLS
-            dataArr = dataArr.append(df, ignore_index=True)
+            dataArr = pd.concat([dataArr, df], ignore_index=True)
             nextPage = html.xpath('//div[@class=\"pages\"]/a[last()]/@onclick')
             if len(nextPage)>0:
                 pageNo = re.findall(r'\d+', nextPage[0])[0]
@@ -214,7 +205,7 @@ def _broker_tops(last=5, pageNo=1, retry_count=3, pause=0.001, dataArr=pd.DataFr
             else:
                 return dataArr
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
         
 
 def inst_tops(days= 5, retry_count= 3, pause= 0.001):
@@ -258,16 +249,13 @@ def _inst_tops(last=5, pageNo=1, retry_count=3, pause=0.001, dataArr=pd.DataFram
             text = text.decode('GBK')
             html = lxml.html.parse(StringIO(text))
             res = html.xpath("//table[@id=\"dataTable\"]/tr")
-            if ct.PY3:
-                sarr = [etree.tostring(node).decode('utf-8') for node in res]
-            else:
-                sarr = [etree.tostring(node) for node in res]
+            sarr = [etree.tostring(node).decode('utf-8') for node in res]
             sarr = ''.join(sarr)
             sarr = '<table>%s</table>'%sarr
             df = pd.read_html(sarr)[0]
             df = df.drop([2,3], axis=1)
             df.columns = rv.LHB_JGZZ_COLS
-            dataArr = dataArr.append(df, ignore_index=True)
+            dataArr = pd.concat([dataArr, df], ignore_index=True)
             nextPage = html.xpath('//div[@class=\"pages\"]/a[last()]/@onclick')
             if len(nextPage)>0:
                 pageNo = re.findall(r'\d+', nextPage[0])[0]
@@ -275,7 +263,7 @@ def _inst_tops(last=5, pageNo=1, retry_count=3, pause=0.001, dataArr=pd.DataFram
             else:
                 return dataArr
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
 
 
 def inst_detail(retry_count= 3, pause= 0.001):
@@ -316,15 +304,12 @@ def _inst_detail(pageNo=1, retry_count=3, pause=0.001, dataArr=pd.DataFrame()):
             text = text.decode('GBK')
             html = lxml.html.parse(StringIO(text))
             res = html.xpath("//table[@id=\"dataTable\"]/tr")
-            if ct.PY3:
-                sarr = [etree.tostring(node).decode('utf-8') for node in res]
-            else:
-                sarr = [etree.tostring(node) for node in res]
+            sarr = [etree.tostring(node).decode('utf-8') for node in res]
             sarr = ''.join(sarr)
             sarr = '<table>%s</table>'%sarr
             df = pd.read_html(sarr)[0]
             df.columns = rv.LHB_JGMX_COLS
-            dataArr = dataArr.append(df, ignore_index=True)
+            dataArr = pd.concat([dataArr, df], ignore_index=True)
             nextPage = html.xpath('//div[@class=\"pages\"]/a[last()]/@onclick')
             if len(nextPage)>0:
                 pageNo = re.findall(r'\d+', nextPage[0])[0]
@@ -332,7 +317,7 @@ def _inst_detail(pageNo=1, retry_count=3, pause=0.001, dataArr=pd.DataFrame()):
             else:
                 return dataArr
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
 
             
 def _f_rows(x):

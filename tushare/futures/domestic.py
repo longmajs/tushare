@@ -11,16 +11,10 @@ import datetime
 from bs4 import BeautifulSoup
 import pandas as pd
 from tushare.futures import domestic_cons as ct
-try:
-    from urllib.request import urlopen, Request
-    from urllib.parse import urlencode
-    from urllib.error import HTTPError
-    from http.client import IncompleteRead
-except ImportError:
-    from urllib import urlencode
-    from urllib2 import urlopen, Request
-    from urllib2 import HTTPError
-    from httplib import IncompleteRead
+from urllib.request import urlopen, Request
+from urllib.parse import urlencode
+from urllib.error import HTTPError
+from http.client import IncompleteRead
 
 
 def get_cffex_daily(date = None):

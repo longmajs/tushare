@@ -9,12 +9,12 @@ Created on 2015/12/24
 import pandas as pd
 from tushare.stock import cons as ct
 from tushare.util import dateu as du
-try:
-    from urllib.request import urlopen, Request
-except ImportError:
-    from urllib2 import urlopen, Request
+from urllib.request import urlopen, Request
 import time
 import json
+import logging
+LOG = logging.getLogger("tushare.boxoffice")
+
 
 def realtime_boxoffice(retry_count=3,pause=0.001):
     """
@@ -46,9 +46,9 @@ def realtime_boxoffice(retry_count=3,pause=0.001):
             if len(lines) < 15: #no data
                 return None
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
         else:
-            js = json.loads(lines.decode('utf-8') if ct.PY3 else lines)
+            js = json.loads(lines.decode('utf-8'))
             df = pd.DataFrame(js['data2'])
             df = df.drop(['MovieImg','mId'], axis=1)
             df['time'] = du.get_now()
@@ -93,9 +93,9 @@ def day_boxoffice(date=None, retry_count=3, pause=0.001):
             if len(lines) < 15: #no data
                 return None
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
         else:
-            js = json.loads(lines.decode('utf-8') if ct.PY3 else lines)
+            js = json.loads(lines.decode('utf-8'))
             df = pd.DataFrame(js['data1'])
             df = df.drop(['MovieImg', 'BoxOffice1', 'MovieID', 'Director', 'IRank_pro'], axis=1)
             return df
@@ -140,9 +140,9 @@ def month_boxoffice(date=None, retry_count=3, pause=0.001):
             if len(lines) < 15: #no data
                 return None
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
         else:
-            js = json.loads(lines.decode('utf-8') if ct.PY3 else lines)
+            js = json.loads(lines.decode('utf-8'))
             df = pd.DataFrame(js['data1'])
             df = df.drop(['defaultImage', 'EnMovieID'], axis=1)
             return df
@@ -195,9 +195,9 @@ def _day_cinema(date=None, pNo=1, retry_count=3, pause=0.001):
             if len(lines) < 15: #no data
                 return None
         except Exception as e:
-            print(e)
+            LOG.warning("%s", e)
         else:
-            js = json.loads(lines.decode('utf-8') if ct.PY3 else lines)
+            js = json.loads(lines.decode('utf-8'))
             df = pd.DataFrame(js['data1'])
             df = df.drop(['CinemaID'], axis=1)
             return df

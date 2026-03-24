@@ -7,10 +7,7 @@ Created on 2015年7月31日
 @QQ:52799046
 """
 
-try:
-    from httplib import HTTPSConnection
-except ImportError:
-    from http.client import HTTPSConnection
+from http.client import HTTPSConnection
 import urllib
 from tushare.util import vars as vs
 from tushare.stock import cons as ct
@@ -39,10 +36,7 @@ class Client:
             if(i>=0):
                 for j in range(start, i):
                     if(path[j] > '~'):
-                        if ct.PY3:
-                            re += urllib.parse.quote(path[j])
-                        else:
-                            re += urllib.quote(path[j])
+                        re += urllib.parse.quote(path[j])
                     else:
                         re += path[j]  
                 re += '&'
@@ -50,10 +44,7 @@ class Client:
             else:
                 for j in range(start, n):
                     if(path[j] > '~'):
-                        if ct.PY3:
-                            re += urllib.parse.quote(path[j])
-                        else:
-                            re += urllib.quote(path[j])
+                        re += urllib.parse.quote(path[j])
                     else:
                         re += path[j]  
                 start = n

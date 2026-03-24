@@ -7,7 +7,6 @@ Created on 2016年9月25日
 @group : waditu
 @contact: jimmysoa@sina.cn
 '''
-import six
 import pandas as pd
 import requests
 import time
@@ -16,6 +15,9 @@ from tushare.trader import vars as vs
 from tushare.trader import utils
 from tushare.util import upass as up
 from tushare.util.upass import set_broker
+import logging
+LOG = logging.getLogger("tushare.trader")
+
 
 class TraderAPI(object):
     """
@@ -33,11 +35,7 @@ class TraderAPI(object):
                                              vs.PAGES['csclogin'])
         self.heart_active = True
         self.s = requests.session()
-        if six.PY2:
-            self.heart_thread = Thread(target = self.send_heartbeat)
-            self.heart_thread.setDaemon(True)
-        else:
-            self.heart_thread = Thread(target = self.send_heartbeat, 
+        self.heart_thread = Thread(target = self.send_heartbeat,
                                        daemon=True)
             
             
@@ -88,7 +86,7 @@ class TraderAPI(object):
                 try:
                     response = self.heartbeat()
                     self.check_account_live(response)
-                except:
+                except Exception:
                     self.login()
                 time.sleep(100)
             else:

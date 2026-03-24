@@ -10,7 +10,6 @@ Created on 2016年10月1日
 
 import json
 import time
-import six
 from tushare.trader import vars as vs
 
 def nowtime_str():
@@ -19,8 +18,7 @@ def nowtime_str():
 
 def get_jdata(txtdata):
     txtdata = txtdata.content
-    if six.PY3:
-        txtdata = txtdata.decode('utf-8')
+    txtdata = txtdata.decode('utf-8')
     jsonobj = json.loads(txtdata)
     return jsonobj
         
