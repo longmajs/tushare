@@ -16,7 +16,7 @@ import pandas as pd
 import numpy as np
 import datetime
 from tushare.stock import cons as ct
-from tushare.stock.market_core import _safe_json_loads
+from tushare.util.http import _safe_json_loads
 import re
 from io import StringIO
 import warnings

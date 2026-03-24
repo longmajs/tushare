@@ -9,7 +9,7 @@ Created on 2015/02/07
 """
 
 from tushare.stock import cons as ct
-from tushare.stock.market_core import _safe_json_loads
+from tushare.util.http import _safe_json_loads
 from tushare.stock import news_vars as nv
 import pandas as pd
 from datetime import datetime

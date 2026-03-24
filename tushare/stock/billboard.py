@@ -11,7 +11,7 @@ Created on 2015年6月10日
 import pandas as pd
 from io import StringIO
 from tushare.stock import cons as ct
-from tushare.stock.market_core import _safe_json_loads
+from tushare.util.http import _safe_json_loads
 import numpy as np
 import time
 import json

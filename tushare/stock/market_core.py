@@ -7,186 +7,37 @@ This module centralizes HTTP behaviors, retries, caching and parser logic for
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import os
-import pickle
 import random
 import time
 import warnings
-from dataclasses import dataclass, field
 from io import StringIO
-from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence
+from typing import Optional
 
 import pandas as pd
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 from tushare.stock import cons as ct
 from tushare.util import dateu as du
-
+from tushare.util.http import (
+    DataSourceUnavailable,
+    HttpClient,
+    MarketConfig,
+    MarketError,
+    ParseError,
+    RateLimited,
+    UnsupportedFeature,
+    _safe_json_loads,
+    get_client,
+    get_config,
+    reset_client,
+)
 
 LOG = logging.getLogger("tushare.market")
 
-
-class MarketError(Exception):
-    """Base exception for market engine."""
-
-
-class DataSourceUnavailable(MarketError):
-    """Raised when upstream source is unavailable or blocked."""
-
-
-class ParseError(MarketError):
-    """Raised when upstream payload format changed and parser failed."""
-
-
-class UnsupportedFeature(MarketError):
-    """Raised when a legacy interface can not be supported reliably."""
-
-
-class RateLimited(MarketError):
-    """Raised when source throttles requests."""
-
-
-@dataclass
-class MarketConfig:
-    timeout: float = 10.0
-    retries: int = 3
-    backoff_factor: float = 0.25
-    prefer_sources: List[str] = field(default_factory=lambda: ["tencent", "sina", "tdx"])
-    enable_tdx: bool = True
-    cache_dir: str = field(default_factory=lambda: os.path.expanduser("~/.cache/tushare"))
-    cache_ttl: Dict[str, int] = field(
-        default_factory=lambda: {
-            "kline_daily": 86400,
-            "kline_min": 60,
-            "realtime": 8,
-            "today_all": 8,
-            "today_ticks": 8,
-            "tick": 8,
-        }
-    )
-    legacy_mode: bool = field(default_factory=lambda: os.environ.get("TS_MARKET_LEGACY", "0") == "1")
-
-
-_CONFIG = MarketConfig()
+_CONFIG = get_config()
 _CLIENT = None
-
-
-def _now() -> float:
-    return time.time()
-
-
-class _FileCache:
-    def __init__(self, cache_dir: str):
-        self._root = Path(cache_dir)
-        self._root.mkdir(parents=True, exist_ok=True)
-
-    def _path_for(self, cache_key: str) -> Path:
-        digest = hashlib.sha1(cache_key.encode("utf-8")).hexdigest()
-        return self._root / (digest + ".pkl")
-
-    def get(self, cache_key: str):
-        path = self._path_for(cache_key)
-        if not path.exists():
-            return None
-        try:
-            with path.open("rb") as fh:
-                payload = pickle.load(fh)
-            if payload.get("expires_at", 0) < _now():
-                try:
-                    path.unlink()
-                except OSError:
-                    pass
-                return None
-            return payload.get("value")
-        except Exception:
-            return None
-
-    def set(self, cache_key: str, value, ttl: int):
-        path = self._path_for(cache_key)
-        payload = {"expires_at": _now() + max(1, int(ttl)), "value": value}
-        try:
-            with path.open("wb") as fh:
-                pickle.dump(payload, fh, protocol=pickle.HIGHEST_PROTOCOL)
-        except Exception:
-            return
-
-
-class HttpClient:
-    def __init__(self, cfg: MarketConfig):
-        self.cfg = cfg
-        self.cache = _FileCache(cfg.cache_dir)
-        self.session = requests.Session()
-        retry = Retry(
-            total=max(0, int(cfg.retries)),
-            read=max(0, int(cfg.retries)),
-            connect=max(0, int(cfg.retries)),
-            backoff_factor=max(0.0, float(cfg.backoff_factor)),
-            status_forcelist=(429, 500, 502, 503, 504),
-            allowed_methods=frozenset(["GET"]),
-        )
-        adapter = HTTPAdapter(max_retries=retry)
-        self.session.mount("http://", adapter)
-        self.session.mount("https://", adapter)
-        self.default_headers = {
-            "User-Agent": "Mozilla/5.0 (compatible; tushare-market/2.0)",
-            "Accept": "*/*",
-        }
-
-    def get_text(
-        self,
-        url: str,
-        *,
-        params: Optional[dict] = None,
-        headers: Optional[dict] = None,
-        encoding: Optional[str] = None,
-        ttl: Optional[int] = None,
-        cache_key: Optional[str] = None,
-        source: str = "",
-        endpoint: str = "",
-    ) -> str:
-        merged_headers = dict(self.default_headers)
-        if headers:
-            merged_headers.update(headers)
-        resolved_ttl = ttl if ttl is not None else 0
-        if cache_key and resolved_ttl > 0:
-            cached = self.cache.get(cache_key)
-            if cached is not None:
-                LOG.info("market cache hit source=%s endpoint=%s key=%s", source, endpoint, cache_key)
-                return cached
-
-        started = _now()
-        resp = None
-        try:
-            resp = self.session.get(url, params=params, headers=merged_headers, timeout=self.cfg.timeout)
-            if resp.status_code == 429:
-                raise RateLimited("source=%s endpoint=%s returned 429" % (source, endpoint))
-            if resp.status_code >= 400:
-                raise DataSourceUnavailable(
-                    "source=%s endpoint=%s status=%s" % (source, endpoint, resp.status_code)
-                )
-            text = resp.content.decode(encoding, errors="ignore") if encoding else resp.text
-        except RateLimited:
-            raise
-        except requests.RequestException as exc:
-            raise DataSourceUnavailable("source=%s endpoint=%s err=%s" % (source, endpoint, exc))
-        elapsed = _now() - started
-        LOG.info(
-            "market request ok source=%s endpoint=%s status=%s elapsed=%.3fs",
-            source,
-            endpoint,
-            resp.status_code if resp is not None else "n/a",
-            elapsed,
-        )
-
-        if cache_key and resolved_ttl > 0:
-            self.cache.set(cache_key, text, resolved_ttl)
-        return text
 
 
 
@@ -214,7 +65,7 @@ def set_market_config(
         _CONFIG.enable_tdx = bool(enable_tdx)
 
     _CONFIG.legacy_mode = os.environ.get("TS_MARKET_LEGACY", "0") == "1"
-    _CLIENT = None
+    reset_client()
     return {
         "timeout": _CONFIG.timeout,
         "retries": _CONFIG.retries,
@@ -247,10 +98,7 @@ def is_legacy_mode() -> bool:
 
 
 def _client() -> HttpClient:
-    global _CLIENT
-    if _CLIENT is None:
-        _CLIENT = HttpClient(_CONFIG)
-    return _CLIENT
+    return get_client()
 
 
 
