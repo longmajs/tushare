@@ -1033,7 +1033,7 @@ def stock_issuance(start_date='', end_date=''):
     if start_date != '' and start_date is not None:
         df = df[df.issue_date >= start_date]
     if end_date != '' and end_date is not None:
-        df = df[df.issue_date <= start_date]
+        df = df[df.issue_date <= end_date]
     df['prem'] = (df['close'] - df['price']) / df['price'] * 100
     df['prem'] = df['prem'].map(ct.FORMAT)
     df['prem'] = df['prem'].astype(float)

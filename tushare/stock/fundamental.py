@@ -450,8 +450,7 @@ def get_balance_sheet(code):
     if code.isdigit():
         text = get_client().get_text(
             ct.SINA_BALANCESHEET_URL%(code),
-            source='sina', endpoint='balance_sheet').encode()
-        text = text.decode('GBK')
+            encoding='GBK', source='sina', endpoint='balance_sheet')
         text = text.replace('\t\n', '\r\n')
         text = text.replace('\t', ',')
         df = pd.read_csv(StringIO(text), dtype={'code':'object'})
@@ -472,8 +471,7 @@ def get_profit_statement(code):
     if code.isdigit():
         text = get_client().get_text(
             ct.SINA_PROFITSTATEMENT_URL%(code),
-            source='sina', endpoint='profit_statement').encode()
-        text = text.decode('GBK')
+            encoding='GBK', source='sina', endpoint='profit_statement')
         text = text.replace('\t\n', '\r\n')
         text = text.replace('\t', ',')
         df = pd.read_csv(StringIO(text), dtype={'code':'object'})
@@ -495,8 +493,7 @@ def get_cash_flow(code):
     if code.isdigit():
         text = get_client().get_text(
             ct.SINA_CASHFLOW_URL%(code),
-            source='sina', endpoint='cashflow_statement').encode()
-        text = text.decode('GBK')
+            encoding='GBK', source='sina', endpoint='cashflow_statement')
         text = text.replace('\t\n', '\r\n')
         text = text.replace('\t', ',')
         df = pd.read_csv(StringIO(text), dtype={'code':'object'})

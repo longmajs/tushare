@@ -232,8 +232,10 @@ def _safe_json_loads(text):
         return json.loads(text)
     except (json.JSONDecodeError, ValueError):
         pass
+    if not text:
+        raise json.JSONDecodeError("empty payload", text, 0)
     # Strip wrapping chars (e.g. parentheses from JSONP-like responses).
-    if text and text[0] in ("(", ")") or text[-1] in ("(", ")"):
+    if text[0] in ("(", ")") or text[-1] in ("(", ")"):
         text = text.strip("()")
     # Strip var assignment prefix.
     if "=" in text and text[0] not in "[{":

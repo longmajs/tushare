@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import random
+import re
 import time
 import warnings
 from io import StringIO
@@ -336,27 +337,6 @@ def fetch_sina_realtime_quotes(symbols=None):
     for col in [c for c in df.columns if c.endswith("_v")]:
         df[col] = df[col].map(lambda x: x[:-2] if isinstance(x, str) and len(x) > 2 else x)
     return df
-
-
-import re
-
-
-def _safe_json_loads(text):
-    """Parse JSON, falling back to JS-style object handling."""
-    text = text.strip()
-    try:
-        return json.loads(text)
-    except (json.JSONDecodeError, ValueError):
-        pass
-    # Strip wrapping chars (e.g. parentheses from JSONP-like responses).
-    if text and text[0] in ("(", ")") or text[-1] in ("(", ")"):
-        text = text.strip("()")
-    # Strip var assignment prefix.
-    if "=" in text and text[0] not in "[{":
-        text = text.split("=", 1)[1].strip().rstrip(";")
-    # Quote unquoted JS-style keys: {key: value} -> {"key": value}
-    text = re.sub(r'(?<=[{,])\s*(\w+)\s*:', r' "\1":', text)
-    return json.loads(text)
 
 
 def _fetch_today_all_node(node: str, max_pages: int = 200) -> pd.DataFrame:
