@@ -83,7 +83,9 @@ from tushare.stock.shibor import (shibor_data, shibor_quote_data,
 """
 for utils
 """
-from tushare.util.dateu import (trade_cal, is_holiday)
+from tushare.util.dateu import (trade_cal, is_holiday, is_trading_day,
+                                next_trading_day, prev_trading_day,
+                                filter_suspended, filter_delisted)
 
 
 def _optional_import(loader):
@@ -149,6 +151,18 @@ def _load_bonds():
     globals().update(locals())
 
 
+def _load_visual():
+    from tushare.visual import plot_kline, plot_compare, plot_timesharing, plot_tick
+    globals().update(locals())
+
+
+def _load_quant():
+    from tushare.quant import (ma_crossover, macd_signal, rsi_signal,
+                               bollinger_signal, SimpleBacktest, BacktestResult,
+                               plot_result)
+    globals().update(locals())
+
+
 for _loader in (
     _load_pro,
     _load_billboard,
@@ -160,5 +174,7 @@ for _loader in (
     _load_coins,
     _load_conns_tokens,
     _load_bonds,
+    _load_visual,
+    _load_quant,
 ):
     _optional_import(_loader)
