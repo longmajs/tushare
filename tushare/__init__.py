@@ -144,6 +144,11 @@ def _load_conns_tokens():
     globals().update(locals())
 
 
+def _load_bonds():
+    from tushare.bond import get_cbonds, get_bond_info
+    globals().update(locals())
+
+
 for _loader in (
     _load_pro,
     _load_billboard,
@@ -154,5 +159,6 @@ for _loader in (
     _load_globals_mailmerge,
     _load_coins,
     _load_conns_tokens,
+    _load_bonds,
 ):
     _optional_import(_loader)
