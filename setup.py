@@ -65,11 +65,9 @@ return::
 def read_install_requires():
     reqs = [
             'pandas>=1.3.0',
-            'requests>=2.0.0',
+            'requests>=2.20.0',
             'lxml>=3.8.0',
             'simplejson>=3.16.0',
-            'msgpack>=0.5.6',
-            'pyzmq>=16.0.0'
             ]
     return reqs
 
@@ -78,23 +76,26 @@ setup(
     name='tushare',
     version=read('tushare/VERSION.txt'),
     description='A utility for crawling historical and Real-time Quotes data of China stocks',
-#     long_description=read("READM.rst"),
     long_description = long_desc,
     author='Jimmy Liu',
     author_email='jimmysoa@sina.cn',
     license='BSD',
     url='http://tushare.org',
     install_requires=read_install_requires(),
+    extras_require={
+        'pro': ['pyzmq>=16.0.0', 'msgpack>=0.5.6'],
+        'tdx': ['pytdx>=1.72'],
+    },
     keywords='Global Financial Data',
     classifiers=['Development Status :: 4 - Beta',
-    'Programming Language :: Python :: 3.7',
     'Programming Language :: Python :: 3.8',
     'Programming Language :: Python :: 3.9',
     'Programming Language :: Python :: 3.10',
     'Programming Language :: Python :: 3.11',
     'Programming Language :: Python :: 3.12',
+    'Programming Language :: Python :: 3.13',
     'License :: OSI Approved :: BSD License'],
-    python_requires='>=3.7',
+    python_requires='>=3.8',
     packages=find_packages(),
     include_package_data=True,
     package_data={'': ['*.csv', '*.txt']},

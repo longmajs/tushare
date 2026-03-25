@@ -193,6 +193,55 @@ class HttpClient:
             self.cache.set(cache_key, text, resolved_ttl)
         return text
 
+    def get_bytes(
+        self,
+        url: str,
+        *,
+        params: Optional[dict] = None,
+        headers: Optional[dict] = None,
+        ttl: Optional[int] = None,
+        cache_key: Optional[str] = None,
+        source: str = "",
+        endpoint: str = "",
+    ) -> bytes:
+        """Fetch URL and return raw response bytes (for binary payloads like XLS)."""
+        merged_headers = dict(self.default_headers)
+        if headers:
+            merged_headers.update(headers)
+        resolved_ttl = ttl if ttl is not None else 0
+        if cache_key and resolved_ttl > 0:
+            cached = self.cache.get(cache_key)
+            if cached is not None:
+                LOG.info("cache hit source=%s endpoint=%s key=%s", source, endpoint, cache_key)
+                return cached
+
+        started = _now()
+        resp = None
+        try:
+            resp = self.session.get(url, params=params, headers=merged_headers, timeout=self.cfg.timeout)
+            if resp.status_code == 429:
+                raise RateLimited("source=%s endpoint=%s returned 429" % (source, endpoint))
+            if resp.status_code >= 400:
+                raise DataSourceUnavailable(
+                    "source=%s endpoint=%s status=%s" % (source, endpoint, resp.status_code)
+                )
+            data = resp.content
+        except RateLimited:
+            raise
+        except requests.RequestException as exc:
+            raise DataSourceUnavailable("source=%s endpoint=%s err=%s" % (source, endpoint, exc))
+        elapsed = _now() - started
+        LOG.info(
+            "request ok source=%s endpoint=%s status=%s elapsed=%.3fs",
+            source, endpoint,
+            resp.status_code if resp is not None else "n/a",
+            elapsed,
+        )
+
+        if cache_key and resolved_ttl > 0:
+            self.cache.set(cache_key, data, resolved_ttl)
+        return data
+
 
 # ---------------------------------------------------------------------------
 # Singleton client
