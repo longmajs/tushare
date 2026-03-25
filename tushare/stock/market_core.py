@@ -15,7 +15,7 @@ import re
 import time
 import warnings
 from io import StringIO
-from typing import Optional
+from typing import Callable, Dict, List, Optional
 
 import pandas as pd
 
@@ -36,6 +36,51 @@ from tushare.util.http import (
 )
 
 LOG = logging.getLogger("tushare.market")
+
+# ---------------------------------------------------------------------------
+# Optional pytdx support — lazy singleton connection
+# ---------------------------------------------------------------------------
+try:
+    from pytdx.hq import TdxHq_API
+    _HAS_PYTDX = True
+except ImportError:
+    TdxHq_API = None
+    _HAS_PYTDX = False
+
+_TDX_API = None
+
+
+def _get_tdx_api() -> "TdxHq_API":
+    """Return a lazy pytdx connection singleton (from conns.py pattern)."""
+    global _TDX_API
+    if not _HAS_PYTDX:
+        raise DataSourceUnavailable("pytdx is not installed")
+    if _TDX_API is not None:
+        try:
+            # Quick heartbeat check — if connection is dead, reconnect.
+            _TDX_API.get_security_count(0)
+            return _TDX_API
+        except Exception:
+            _TDX_API = None
+    api = TdxHq_API(heartbeat=True)
+    ip = ct._get_server()
+    try:
+        api.connect(ip, ct.T_PORT)
+    except Exception as exc:
+        raise DataSourceUnavailable("pytdx connect failed: %s" % exc)
+    _TDX_API = api
+    return _TDX_API
+
+
+def _tdx_market_code(code: str) -> int:
+    """Map 6-digit stock code to pytdx market code (0=SZ, 1=SH)."""
+    return ct._market_code(code)
+
+
+_TDX_KTYPE_MAP = {
+    "D": 9, "W": 5, "M": 6,
+    "5": 0, "15": 1, "30": 2, "60": 3,
+}
 
 _CONFIG = get_config()
 _CLIENT = None
@@ -100,6 +145,138 @@ def is_legacy_mode() -> bool:
 
 def _client() -> HttpClient:
     return get_client()
+
+
+# ---------------------------------------------------------------------------
+# pytdx data fetchers
+# ---------------------------------------------------------------------------
+
+def fetch_tdx_k_data(code=None, start="", end="", ktype="D", autype="qfq", index=False):
+    """Fetch K-line data via pytdx local protocol.
+
+    Returns a DataFrame compatible with fetch_tencent_k_data output, or raises
+    DataSourceUnavailable if pytdx is not installed or connection fails.
+    """
+    if code is None:
+        raise ValueError("code is required")
+    if not _HAS_PYTDX or not _CONFIG.enable_tdx:
+        raise DataSourceUnavailable("pytdx source is disabled or not installed")
+
+    ktype = str(ktype).strip().upper()
+    if ktype not in _TDX_KTYPE_MAP:
+        raise TypeError("ktype %s not supported by pytdx source" % ktype)
+
+    api = _get_tdx_api()
+    mkt = 1 if index else _tdx_market_code(code)
+    tdx_ktype = _TDX_KTYPE_MAP[ktype]
+
+    all_rows = []
+    for i in range(100):
+        try:
+            ds = api.get_security_bars(tdx_ktype, mkt, code, i * 800, 800)
+        except Exception as exc:
+            raise DataSourceUnavailable("pytdx get_security_bars failed: %s" % exc)
+        if not ds:
+            break
+        all_rows.extend(ds)
+        if len(ds) < 800:
+            break
+
+    if not all_rows:
+        return pd.DataFrame(columns=ct.KLINE_TT_COLS_MINS + ["code"])
+
+    df = pd.DataFrame(all_rows)
+    df["date"] = df["datetime"].apply(lambda x: str(x)[:10] if ktype in ct.K_LABELS else str(x)[:16])
+    df = df.rename(columns={"vol": "volume"})
+    for col in ["open", "close", "high", "low", "volume"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    df["code"] = code
+
+    if start:
+        df = df[df["date"] >= start]
+    if end:
+        df = df[df["date"] <= end]
+
+    cols = ct.KLINE_TT_COLS_MINS + ["code"]
+    for c in cols:
+        if c not in df.columns:
+            df[c] = None
+    return df[cols].reset_index(drop=True)
+
+
+def fetch_tdx_realtime_quotes(symbols=None):
+    """Fetch realtime quotes via pytdx local protocol.
+
+    Returns a DataFrame compatible with fetch_sina_realtime_quotes output, or
+    raises DataSourceUnavailable if pytdx is not available.
+    """
+    if symbols is None:
+        return None
+    if not _HAS_PYTDX or not _CONFIG.enable_tdx:
+        raise DataSourceUnavailable("pytdx source is disabled or not installed")
+
+    api = _get_tdx_api()
+
+    if isinstance(symbols, (list, tuple, set, pd.Series)):
+        code_list = [str(c) for c in symbols]
+    else:
+        code_list = [str(symbols)]
+
+    params = [(ct._market_code(c), c) for c in code_list]
+    try:
+        ds = api.get_security_quotes(params)
+    except Exception as exc:
+        raise DataSourceUnavailable("pytdx get_security_quotes failed: %s" % exc)
+
+    if not ds:
+        return None
+
+    df = pd.DataFrame(ds)
+    result = pd.DataFrame({
+        "code": df["code"],
+        "name": "",
+        "open": pd.to_numeric(df.get("open", 0), errors="coerce"),
+        "pre_close": pd.to_numeric(df.get("last_close", 0), errors="coerce"),
+        "price": pd.to_numeric(df.get("price", 0), errors="coerce"),
+        "high": pd.to_numeric(df.get("high", 0), errors="coerce"),
+        "low": pd.to_numeric(df.get("low", 0), errors="coerce"),
+        "volume": pd.to_numeric(df.get("vol", 0), errors="coerce"),
+        "amount": pd.to_numeric(df.get("amount", 0), errors="coerce"),
+    })
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Source cascade fallback
+# ---------------------------------------------------------------------------
+
+def _fetch_with_fallback(sources: List[str], fetchers: Dict[str, Callable], **kwargs):
+    """Try fetchers in source order; return first success or raise last error.
+
+    Parameters
+    ----------
+    sources : list of source names, e.g. ["tencent", "sina", "tdx"]
+    fetchers : dict mapping source name to a callable
+    **kwargs : passed to each fetcher
+    """
+    last_exc = None
+    for src in sources:
+        fn = fetchers.get(src)
+        if fn is None:
+            continue
+        try:
+            result = fn(**kwargs)
+            if result is not None:
+                LOG.info("cascade hit source=%s", src)
+                return result
+        except (DataSourceUnavailable, RateLimited, Exception) as exc:
+            LOG.warning("cascade source=%s failed: %s", src, exc)
+            last_exc = exc
+            continue
+    if last_exc is not None:
+        raise DataSourceUnavailable("all sources exhausted, last error: %s" % last_exc)
+    return None
 
 
 
@@ -267,7 +444,7 @@ def fetch_tencent_k_data(code=None, start="", end="", ktype="D", autype="qfq", i
 
 
 
-def _normalize_symbols(symbols) -> List[str]:
+def _normalize_symbols(symbols) -> list:
     if isinstance(symbols, (list, tuple, set, pd.Series)):
         return [ct._code_to_symbol(str(code)) for code in symbols]
     return [ct._code_to_symbol(str(symbols))]
