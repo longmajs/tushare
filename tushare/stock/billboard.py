@@ -20,7 +20,7 @@ import lxml.html
 from lxml import etree
 from tushare.util import dateu as du
 from tushare.stock import ref_vars as rv
-from urllib.request import urlopen, Request
+from tushare.util.http import get_client
 import logging
 LOG = logging.getLogger("tushare.billboard")
 
@@ -62,9 +62,9 @@ def top_list(date = None, retry_count=3, pause=0.001):
     for _ in range(retry_count):
         time.sleep(pause)
         try:
-            request = Request(rv.LHB_URL%(ct.P_TYPE['http'], ct.DOMAINS['em'], date, date))
-            text = urlopen(request, timeout=10).read()
-            text = text.decode('GBK')
+            text = get_client().get_text(
+                rv.LHB_URL%(ct.P_TYPE['http'], ct.DOMAINS['em'], date, date),
+                encoding='GBK', source='em', endpoint='lhb')
             text = text.split('_1=')[1]
             text = _safe_json_loads(text)
             df = pd.DataFrame(text['data'], columns=rv.LHB_TMP_COLS)
@@ -131,10 +131,10 @@ def _cap_tops(last=5, pageNo=1, retry_count=3, pause=0.001, dataArr=pd.DataFrame
     for _ in range(retry_count):
         time.sleep(pause)
         try:
-            request = Request(rv.LHB_SINA_URL%(ct.P_TYPE['http'], ct.DOMAINS['vsf'], rv.LHB_KINDS[0],
-                                               ct.PAGES['fd'], last, pageNo))
-            text = urlopen(request, timeout=10).read()
-            text = text.decode('GBK')
+            text = get_client().get_text(
+                rv.LHB_SINA_URL%(ct.P_TYPE['http'], ct.DOMAINS['vsf'], rv.LHB_KINDS[0],
+                                 ct.PAGES['fd'], last, pageNo),
+                encoding='GBK', source='sina', endpoint='lhb_cap')
             html = lxml.html.parse(StringIO(text))
             res = html.xpath("//table[@id=\"dataTable\"]/tr")
             sarr = [etree.tostring(node).decode('utf-8') for node in res]
@@ -186,10 +186,10 @@ def _broker_tops(last=5, pageNo=1, retry_count=3, pause=0.001, dataArr=pd.DataFr
     for _ in range(retry_count):
         time.sleep(pause)
         try:
-            request = Request(rv.LHB_SINA_URL%(ct.P_TYPE['http'], ct.DOMAINS['vsf'], rv.LHB_KINDS[1],
-                                               ct.PAGES['fd'], last, pageNo))
-            text = urlopen(request, timeout=10).read()
-            text = text.decode('GBK')
+            text = get_client().get_text(
+                rv.LHB_SINA_URL%(ct.P_TYPE['http'], ct.DOMAINS['vsf'], rv.LHB_KINDS[1],
+                                 ct.PAGES['fd'], last, pageNo),
+                encoding='GBK', source='sina', endpoint='lhb_broker')
             html = lxml.html.parse(StringIO(text))
             res = html.xpath("//table[@id=\"dataTable\"]/tr")
             sarr = [etree.tostring(node).decode('utf-8') for node in res]
@@ -243,10 +243,10 @@ def _inst_tops(last=5, pageNo=1, retry_count=3, pause=0.001, dataArr=pd.DataFram
     for _ in range(retry_count):
         time.sleep(pause)
         try:
-            request = Request(rv.LHB_SINA_URL%(ct.P_TYPE['http'], ct.DOMAINS['vsf'], rv.LHB_KINDS[2],
-                                               ct.PAGES['fd'], last, pageNo))
-            text = urlopen(request, timeout=10).read()
-            text = text.decode('GBK')
+            text = get_client().get_text(
+                rv.LHB_SINA_URL%(ct.P_TYPE['http'], ct.DOMAINS['vsf'], rv.LHB_KINDS[2],
+                                 ct.PAGES['fd'], last, pageNo),
+                encoding='GBK', source='sina', endpoint='lhb_inst')
             html = lxml.html.parse(StringIO(text))
             res = html.xpath("//table[@id=\"dataTable\"]/tr")
             sarr = [etree.tostring(node).decode('utf-8') for node in res]
@@ -298,10 +298,10 @@ def _inst_detail(pageNo=1, retry_count=3, pause=0.001, dataArr=pd.DataFrame()):
     for _ in range(retry_count):
         time.sleep(pause)
         try:
-            request = Request(rv.LHB_SINA_URL%(ct.P_TYPE['http'], ct.DOMAINS['vsf'], rv.LHB_KINDS[3],
-                                               ct.PAGES['fd'], '', pageNo))
-            text = urlopen(request, timeout=10).read()
-            text = text.decode('GBK')
+            text = get_client().get_text(
+                rv.LHB_SINA_URL%(ct.P_TYPE['http'], ct.DOMAINS['vsf'], rv.LHB_KINDS[3],
+                                 ct.PAGES['fd'], '', pageNo),
+                encoding='GBK', source='sina', endpoint='lhb_inst_detail')
             html = lxml.html.parse(StringIO(text))
             res = html.xpath("//table[@id=\"dataTable\"]/tr")
             sarr = [etree.tostring(node).decode('utf-8') for node in res]

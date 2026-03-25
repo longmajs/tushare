@@ -14,7 +14,7 @@ import re
 import time
 from io import StringIO
 from tushare.util import dateu as du
-from urllib.request import urlopen, Request
+from tushare.util.http import get_client
 import logging
 LOG = logging.getLogger("tushare.fundamental")
 
@@ -50,9 +50,9 @@ def get_stock_basics(date=None):
     if wdate < '20160809':
         return None
     datepre = '' if date is None else wdate[0:4] + wdate[4:6] + '/'
-    request = Request(ct.ALL_STOCK_BASICS_FILE%(datepre, '' if date is None else wdate))
-    text = urlopen(request, timeout=10).read()
-    text = text.decode('GBK')
+    text = get_client().get_text(
+        ct.ALL_STOCK_BASICS_FILE%(datepre, '' if date is None else wdate),
+        encoding='GBK', source='sina', endpoint='stock_basics')
     text = text.replace('--', '')
     df = pd.read_csv(StringIO(text), dtype={'code':'object'})
     df = df.set_index('code')
@@ -98,10 +98,10 @@ def _get_report_data(year, quarter, pageNo, dataArr,
     for _ in range(retry_count):
         time.sleep(pause)
         try:
-            request = Request(ct.REPORT_URL%(ct.P_TYPE['http'], ct.DOMAINS['vsf'], ct.PAGES['fd'],
-                             year, quarter, pageNo, ct.PAGE_NUM[1]))
-            text = urlopen(request, timeout=10).read()
-            text = text.decode('GBK')
+            text = get_client().get_text(
+                ct.REPORT_URL%(ct.P_TYPE['http'], ct.DOMAINS['vsf'], ct.PAGES['fd'],
+                               year, quarter, pageNo, ct.PAGE_NUM[1]),
+                encoding='GBK', source='sina', endpoint='report')
             text = text.replace('--', '')
             html = lxml.html.parse(StringIO(text))
             res = html.xpath("//table[@class=\"list_table\"]/tr")
@@ -160,11 +160,11 @@ def _get_profit_data(year, quarter, pageNo, dataArr,
     for _ in range(retry_count):
         time.sleep(pause)
         try:
-            request = Request(ct.PROFIT_URL%(ct.P_TYPE['http'], ct.DOMAINS['vsf'],
-                                                  ct.PAGES['fd'], year,
-                                                  quarter, pageNo, ct.PAGE_NUM[1]))
-            text = urlopen(request, timeout=10).read()
-            text = text.decode('GBK')
+            text = get_client().get_text(
+                ct.PROFIT_URL%(ct.P_TYPE['http'], ct.DOMAINS['vsf'],
+                               ct.PAGES['fd'], year,
+                               quarter, pageNo, ct.PAGE_NUM[1]),
+                encoding='GBK', source='sina', endpoint='profit')
             text = text.replace('--', '')
             html = lxml.html.parse(StringIO(text))
             res = html.xpath("//table[@class=\"list_table\"]/tr")
@@ -221,11 +221,11 @@ def _get_operation_data(year, quarter, pageNo, dataArr,
     for _ in range(retry_count):
         time.sleep(pause)
         try:
-            request = Request(ct.OPERATION_URL%(ct.P_TYPE['http'], ct.DOMAINS['vsf'],
-                                                     ct.PAGES['fd'], year,
-                                                     quarter, pageNo, ct.PAGE_NUM[1]))
-            text = urlopen(request, timeout=10).read()
-            text = text.decode('GBK')
+            text = get_client().get_text(
+                ct.OPERATION_URL%(ct.P_TYPE['http'], ct.DOMAINS['vsf'],
+                               ct.PAGES['fd'], year,
+                               quarter, pageNo, ct.PAGE_NUM[1]),
+                encoding='GBK', source='sina', endpoint='operation')
             text = text.replace('--', '')
             html = lxml.html.parse(StringIO(text))
             res = html.xpath("//table[@class=\"list_table\"]/tr")
@@ -282,11 +282,11 @@ def _get_growth_data(year, quarter, pageNo, dataArr,
     for _ in range(retry_count):
         time.sleep(pause)
         try:
-            request = Request(ct.GROWTH_URL%(ct.P_TYPE['http'], ct.DOMAINS['vsf'],
-                                                  ct.PAGES['fd'], year,
-                                                  quarter, pageNo, ct.PAGE_NUM[1]))
-            text = urlopen(request, timeout=50).read()
-            text = text.decode('GBK')
+            text = get_client().get_text(
+                ct.GROWTH_URL%(ct.P_TYPE['http'], ct.DOMAINS['vsf'],
+                               ct.PAGES['fd'], year,
+                               quarter, pageNo, ct.PAGE_NUM[1]),
+                encoding='GBK', source='sina', endpoint='growth')
             text = text.replace('--', '')
             html = lxml.html.parse(StringIO(text))
             res = html.xpath("//table[@class=\"list_table\"]/tr")
@@ -343,11 +343,11 @@ def _get_debtpaying_data(year, quarter, pageNo, dataArr,
     for _ in range(retry_count):
         time.sleep(pause)
         try:
-            request = Request(ct.DEBTPAYING_URL%(ct.P_TYPE['http'], ct.DOMAINS['vsf'],
-                                                      ct.PAGES['fd'], year,
-                                                      quarter, pageNo, ct.PAGE_NUM[1]))
-            text = urlopen(request, timeout=10).read()
-            text = text.decode('GBK')
+            text = get_client().get_text(
+                ct.DEBTPAYING_URL%(ct.P_TYPE['http'], ct.DOMAINS['vsf'],
+                               ct.PAGES['fd'], year,
+                               quarter, pageNo, ct.PAGE_NUM[1]),
+                encoding='GBK', source='sina', endpoint='debtpaying')
             html = lxml.html.parse(StringIO(text))
             res = html.xpath("//table[@class=\"list_table\"]/tr")
             sarr = [etree.tostring(node).decode('utf-8') for node in res]
@@ -402,11 +402,11 @@ def _get_cashflow_data(year, quarter, pageNo, dataArr,
     for _ in range(retry_count):
         time.sleep(pause)
         try:
-            request = Request(ct.CASHFLOW_URL%(ct.P_TYPE['http'], ct.DOMAINS['vsf'],
-                                                    ct.PAGES['fd'], year,
-                                                    quarter, pageNo, ct.PAGE_NUM[1]))
-            text = urlopen(request, timeout=10).read()
-            text = text.decode('GBK')
+            text = get_client().get_text(
+                ct.CASHFLOW_URL%(ct.P_TYPE['http'], ct.DOMAINS['vsf'],
+                               ct.PAGES['fd'], year,
+                               quarter, pageNo, ct.PAGE_NUM[1]),
+                encoding='GBK', source='sina', endpoint='cashflow')
             text = text.replace('--', '')
             html = lxml.html.parse(StringIO(text))
             res = html.xpath("//table[@class=\"list_table\"]/tr")
@@ -448,8 +448,9 @@ def get_balance_sheet(code):
         行列名称为中文且数目较多，建议获取数据后保存到本地查看
     """
     if code.isdigit():
-        request = Request(ct.SINA_BALANCESHEET_URL%(code))
-        text = urlopen(request, timeout=10).read()
+        text = get_client().get_text(
+            ct.SINA_BALANCESHEET_URL%(code),
+            source='sina', endpoint='balance_sheet').encode()
         text = text.decode('GBK')
         text = text.replace('\t\n', '\r\n')
         text = text.replace('\t', ',')
@@ -469,8 +470,9 @@ def get_profit_statement(code):
         行列名称为中文且数目较多，建议获取数据后保存到本地查看
     """
     if code.isdigit():
-        request = Request(ct.SINA_PROFITSTATEMENT_URL%(code))
-        text = urlopen(request, timeout=10).read()
+        text = get_client().get_text(
+            ct.SINA_PROFITSTATEMENT_URL%(code),
+            source='sina', endpoint='profit_statement').encode()
         text = text.decode('GBK')
         text = text.replace('\t\n', '\r\n')
         text = text.replace('\t', ',')
@@ -491,8 +493,9 @@ def get_cash_flow(code):
         行列名称为中文且数目较多，建议获取数据后保存到本地查看
     """
     if code.isdigit():
-        request = Request(ct.SINA_CASHFLOW_URL%(code))
-        text = urlopen(request, timeout=10).read()
+        text = get_client().get_text(
+            ct.SINA_CASHFLOW_URL%(code),
+            source='sina', endpoint='cashflow_statement').encode()
         text = text.decode('GBK')
         text = text.replace('\t\n', '\r\n')
         text = text.replace('\t', ',')

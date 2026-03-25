@@ -17,13 +17,9 @@ import time
 import tushare.stock.fundamental as fd
 from tushare.util.netbase import Client
 
-from urllib.request import urlopen, Request
-from urllib.error import URLError, HTTPError
+from tushare.util.http import get_client, DataSourceUnavailable
 import logging
 LOG = logging.getLogger("tushare.classifying")
-
-
-_NETWORK_ERROR_CLASSES = (URLError, HTTPError, OSError)
 
 
 def get_industry_classified(standard='sina'):
@@ -194,12 +190,12 @@ def _get_detail(tag, retry_count=3, pause=0.001):
             time.sleep(pause)
             try:
                 ct._write_console()
-                request = Request(ct.SINA_DATA_DETAIL_URL%(ct.P_TYPE['http'],
-                                                                   ct.DOMAINS['vsf'], ct.PAGES['jv'],
-                                                                   p,tag))
-                text = urlopen(request, timeout=10).read()
-                text = text.decode('gbk')
-            except _NETWORK_ERROR_CLASSES:
+                text = get_client().get_text(
+                    ct.SINA_DATA_DETAIL_URL%(ct.P_TYPE['http'],
+                                            ct.DOMAINS['vsf'], ct.PAGES['jv'],
+                                            p, tag),
+                    encoding='gbk', source='sina', endpoint='classify_detail')
+            except (DataSourceUnavailable, OSError):
                 pass
             else:
                 break
@@ -220,9 +216,8 @@ def _get_detail(tag, retry_count=3, pause=0.001):
 
 def _get_type_data(url):
     try:
-        request = Request(url)
-        data_str = urlopen(request, timeout=10).read()
-        data_str = data_str.decode('GBK')
+        data_str = get_client().get_text(url, encoding='GBK',
+                                        source='sina', endpoint='classify_type')
         data_str = data_str.split('=')[1]
         data_json = json.loads(data_str)
         df = pd.DataFrame([[row.split(',')[0], row.split(',')[1]] for row in data_json.values()],

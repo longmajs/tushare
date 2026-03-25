@@ -17,7 +17,7 @@ import lxml.html
 from lxml import etree
 import re
 import json
-from urllib.request import urlopen, Request
+from tushare.util.http import get_client
 import logging
 LOG = logging.getLogger("tushare.newsevent")
 
@@ -42,11 +42,10 @@ def get_latest_news(top=None, show_content=False):
     """
     top = ct.PAGE_NUM[2] if top is None else top
     try:
-        request = Request(nv.LATEST_URL % (ct.P_TYPE['http'], ct.DOMAINS['sina'],
-                                                   ct.PAGES['lnews'], top,
-                                                   _random()))
-        data_str = urlopen(request, timeout=10).read()
-        data_str = data_str.decode('GBK')
+        data_str = get_client().get_text(
+            nv.LATEST_URL % (ct.P_TYPE['http'], ct.DOMAINS['sina'],
+                             ct.PAGES['lnews'], top, _random()),
+            encoding='GBK', source='sina', endpoint='latest_news')
         data_str = data_str.split('=')[1][:-1]
         data_str = _safe_json_loads(data_str)
         data_str = data_str['list']
@@ -157,11 +156,10 @@ def guba_sina(show_content=False):
         rcounts,阅读次数
     """
     
-    from urllib.request import urlopen
     try:
-        with urlopen(nv.GUBA_SINA_URL%(ct.P_TYPE['http'],
-                                       ct.DOMAINS['sina'])) as resp:
-            lines = resp.read()
+        lines = get_client().get_text(
+            nv.GUBA_SINA_URL%(ct.P_TYPE['http'], ct.DOMAINS['sina']),
+            source='sina', endpoint='guba')
         html = lxml.html.document_fromstring(lines)
         res = html.xpath('//ul[@class=\"list_05\"]/li[not (@class)]')
         heads = html.xpath('//div[@class=\"tit_04\"]')
