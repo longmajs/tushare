@@ -48,11 +48,33 @@ except ImportError:
     _HAS_PYTDX = False
 
 _TDX_API = None
+_TDX_BEST_HOST = None  # cached after first successful probe
+
+# Known-good TDX hosts (mix of IPs and domain names from broker CDNs)
+_TDX_HOSTS = [
+    'sztdx.gtjas.com', 'shtdx.gtjas.com', 'jstdx.gtjas.com',
+    '115.238.56.198', '115.238.90.165', '180.153.18.170',
+    '60.191.117.167', '218.75.126.9', '60.12.136.250',
+]
+
+
+def _probe_tdx_host(timeout=3):
+    """Try each host in _TDX_HOSTS and return the first one that connects."""
+    import socket
+    for host in _TDX_HOSTS:
+        try:
+            s = socket.create_connection((host, ct.T_PORT), timeout=timeout)
+            s.close()
+            LOG.info("pytdx: selected host %s", host)
+            return host
+        except (socket.timeout, OSError):
+            continue
+    return None
 
 
 def _get_tdx_api() -> "TdxHq_API":
-    """Return a lazy pytdx connection singleton (from conns.py pattern)."""
-    global _TDX_API
+    """Return a lazy pytdx connection singleton, auto-selecting the best host."""
+    global _TDX_API, _TDX_BEST_HOST
     if not _HAS_PYTDX:
         raise DataSourceUnavailable("pytdx is not installed")
     if _TDX_API is not None:
@@ -62,11 +84,15 @@ def _get_tdx_api() -> "TdxHq_API":
             return _TDX_API
         except Exception:
             _TDX_API = None
+    if _TDX_BEST_HOST is None:
+        _TDX_BEST_HOST = _probe_tdx_host()
+    if _TDX_BEST_HOST is None:
+        raise DataSourceUnavailable("pytdx: no reachable TDX host found")
     api = TdxHq_API(heartbeat=True)
-    ip = ct._get_server()
     try:
-        api.connect(ip, ct.T_PORT)
+        api.connect(_TDX_BEST_HOST, ct.T_PORT)
     except Exception as exc:
+        _TDX_BEST_HOST = None  # force re-probe next time
         raise DataSourceUnavailable("pytdx connect failed: %s" % exc)
     _TDX_API = api
     return _TDX_API
