@@ -385,6 +385,8 @@ def fetch_tencent_k_data(code=None, start="", end="", ktype="D", autype="qfq", i
         rows = data_obj.get(period) or data_obj.get("m%s" % ktype) or []
         if not rows:
             return pd.DataFrame(columns=ct.KLINE_TT_COLS_MINS + ["code"])
+        # Minute K rows may have extra trailing fields (dividend dict, pct).
+        rows = [r[:6] for r in rows]
         df = pd.DataFrame(rows, columns=ct.KLINE_TT_COLS_MINS)
         df["date"] = df["date"].map(_format_minute_date)
         df["code"] = symbol if index else code
@@ -448,7 +450,10 @@ def fetch_tencent_k_data(code=None, start="", end="", ktype="D", autype="qfq", i
                     rows = value
                     break
         if rows:
-            cols = ct.KLINE_TT_COLS_MINS if len(rows[0]) == 6 else ct.KLINE_TT_COLS
+            # Some rows (ex-dividend days) carry a 7th element — a dict with
+            # dividend metadata. Strip it so all rows are uniform 6-column.
+            rows = [r[:6] for r in rows]
+            cols = ct.KLINE_TT_COLS_MINS
             chunk_df = pd.DataFrame(rows, columns=cols)
             chunk_df["code"] = symbol if index else code
             for col in ["open", "close", "high", "low", "volume"]:
@@ -482,8 +487,9 @@ def fetch_sina_realtime_quotes(symbols=None):
         return None
     symbol_list = _normalize_symbols(symbols)
     symbols_joined = ",".join(symbol_list)
-    url = "http://hq.sinajs.cn"
-    params = {"rn": str(random.randint(1000000000000, 9999999999999)), "list": symbols_joined}
+    # Commas must NOT be percent-encoded — build the URL manually.
+    rn = random.randint(1000000000000, 9999999999999)
+    url = "http://hq.sinajs.cn?rn=%s&list=%s" % (rn, symbols_joined)
     headers = {
         "Referer": "https://finance.sina.com.cn",
         "Accept-Language": "zh-CN,zh;q=0.9",
@@ -491,7 +497,6 @@ def fetch_sina_realtime_quotes(symbols=None):
     cache_key = "rt:%s" % symbols_joined
     text = _client().get_text(
         url,
-        params=params,
         headers=headers,
         encoding="gbk",
         ttl=_CONFIG.cache_ttl["realtime"],

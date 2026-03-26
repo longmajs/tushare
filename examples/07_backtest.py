@@ -1,6 +1,10 @@
 # -*- coding:utf-8 -*-
 """
 简单回测：资金曲线、最大回撤、夏普比率
+metrics 键: total_return, annualized_return, max_drawdown,
+            sharpe_ratio, win_rate, profit_factor
+trades  列: date, action, price, shares, value, commission
+equity_curve 列: date, equity, drawdown
 """
 import tushare as ts
 from tushare.quant.signals import ma_crossover, macd_signal
@@ -19,16 +23,14 @@ bt = SimpleBacktest(
 result = bt.run(df, signals)
 
 print("=== MA(5,20) 策略回测结果 ===")
-print(f"  初始资金    : ¥{result.metrics['initial_capital']:,.0f}")
-print(f"  最终资金    : ¥{result.metrics['final_equity']:,.0f}")
 print(f"  总收益率    : {result.metrics['total_return']:.2%}")
 print(f"  年化收益率  : {result.metrics['annualized_return']:.2%}")
 print(f"  最大回撤    : {result.metrics['max_drawdown']:.2%}")
 print(f"  夏普比率    : {result.metrics['sharpe_ratio']:.2f}")
 print(f"  胜率        : {result.metrics['win_rate']:.2%}")
-print(f"  总交易次数  : {result.metrics['total_trades']}")
+print(f"  盈亏比      : {result.metrics['profit_factor']:.2f}")
 print(f"\n最近5笔交易:")
-print(result.trades.tail(5)[['date', 'action', 'price', 'shares', 'pnl']].to_string(index=False))
+print(result.trades.tail(5)[['date', 'action', 'price', 'shares']].to_string(index=False))
 
 # ── MACD 策略对比 ────────────────────────────────────────
 signals_macd = macd_signal(df)
@@ -40,11 +42,11 @@ print(f"  年化收益率  : {result_macd.metrics['annualized_return']:.2%}")
 print(f"  最大回撤    : {result_macd.metrics['max_drawdown']:.2%}")
 print(f"  夏普比率    : {result_macd.metrics['sharpe_ratio']:.2f}")
 
-# ── 资金曲线 DataFrame ───────────────────────────────────
-print(f"\n资金曲线（前5行）:")
-print(result.equity_curve.head())
+# ── 资金曲线 ─────────────────────────────────────────────
+print(f"\n资金曲线（最后5行）:")
+print(result.equity_curve.tail())
 
-# ── 可视化资金曲线（需要 matplotlib）────────────────────
+# ── 可视化资金曲线 ────────────────────────────────────────
 try:
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots(figsize=(12, 5))
