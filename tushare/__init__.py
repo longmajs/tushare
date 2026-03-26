@@ -163,6 +163,11 @@ def _load_quant():
     globals().update(locals())
 
 
+def _load_store():
+    from tushare.store import save_kline, load_kline, data_qc
+    globals().update(locals())
+
+
 for _loader in (
     _load_pro,
     _load_billboard,
@@ -176,5 +181,6 @@ for _loader in (
     _load_bonds,
     _load_visual,
     _load_quant,
+    _load_store,
 ):
     _optional_import(_loader)

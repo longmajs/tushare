@@ -3,27 +3,34 @@
 分时图与Tick回放可视化
 Created on 2026/03/26
 """
+import logging
+
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from matplotlib.ticker import MaxNLocator
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator
-import matplotlib.dates as mdates
 
 from tushare.stock.trading import get_realtime_quotes, get_tick_data
 
+LOG = logging.getLogger("tushare.visual")
 
-def plot_timesharing(code, title=None, savefig=None, figsize=(14, 7)):
+
+def plot_timesharing(code_or_df, savefig=None, title=None, figsize=(14, 7)):
     """
     分时图：价格线 vs 均价线，成交量按买卖着色。
 
     Parameters
     ----------
-    code : str
-        股票代码，如 '600848'
+    code_or_df : str or DataFrame
+        股票代码（如 '600848'），自动获取当日 tick 数据；
+        或已有的 tick DataFrame（须含 time/price/volume 列）
+    savefig : str
+        保存路径，为 None 时调用 plt.show()
     title : str
         图表标题
-    savefig : str
-        保存路径，为 None 时交互显示
     figsize : tuple
         图表尺寸
 
@@ -31,23 +38,35 @@ def plot_timesharing(code, title=None, savefig=None, figsize=(14, 7)):
     -------
     None
     """
-    quotes = get_realtime_quotes(code)
-    if quotes is None or quotes.empty:
-        print('No realtime data for %s' % code)
-        return
+    if isinstance(code_or_df, str):
+        code = code_or_df
+        quotes = get_realtime_quotes(code)
+        if quotes is None or quotes.empty:
+            LOG.warning('No realtime data for %s', code)
+            return
 
-    row = quotes.iloc[0]
-    name = row.get('name', code)
-    pre_close = float(row.get('pre_close', 0))
+        row = quotes.iloc[0]
+        name = row.get('name', code)
+        pre_close = float(row.get('pre_close', 0))
 
-    ticks = get_tick_data(code)
-    if ticks is None or ticks.empty:
-        print('No tick data for %s today' % code)
+        ticks = get_tick_data(code)
+        if ticks is None or ticks.empty:
+            LOG.warning('No tick data for %s today', code)
+            return
+
+        chart_title = title or '%s (%s) Time-sharing' % (name, code)
+    elif isinstance(code_or_df, pd.DataFrame):
+        ticks = code_or_df.copy()
+        name = 'Stock'
+        pre_close = 0
+        chart_title = title or 'Time-sharing'
+    else:
+        LOG.warning('code_or_df must be a stock code string or a DataFrame')
         return
 
     df = _prepare_tick_df(ticks)
     if df.empty:
-        print('No valid tick data for %s' % code)
+        LOG.warning('No valid tick data')
         return
 
     df['avg_price'] = (df['amount'].cumsum()) / (df['volume'].cumsum()) \
@@ -69,7 +88,7 @@ def plot_timesharing(code, title=None, savefig=None, figsize=(14, 7)):
 
     ax_price.set_ylabel('Price')
     ax_price.legend(loc='upper left', fontsize=8)
-    ax_price.set_title(title or '%s (%s) Time-sharing' % (name, code))
+    ax_price.set_title(chart_title)
     ax_price.grid(True, alpha=0.3)
 
     # Volume bars colored by buy/sell
@@ -89,25 +108,26 @@ def plot_timesharing(code, title=None, savefig=None, figsize=(14, 7)):
 
     if savefig:
         fig.savefig(savefig, dpi=150, bbox_inches='tight')
-        print('Saved to %s' % savefig)
+        LOG.info('Saved time-sharing chart to %s', savefig)
     else:
         plt.show()
 
 
-def plot_tick(code, date, title=None, savefig=None, figsize=(14, 7)):
+def plot_tick(code_or_df, date=None, savefig=None, title=None, figsize=(14, 7)):
     """
     历史Tick回放：价格走势 + 成交量着色。
 
     Parameters
     ----------
-    code : str
-        股票代码
+    code_or_df : str or DataFrame
+        股票代码（如 '600848'），配合 date 获取历史 tick 数据；
+        或已有的 tick DataFrame（须含 time/price/volume 列）
     date : str
-        日期，格式 YYYY-MM-DD
+        日期，格式 YYYY-MM-DD（仅当 code_or_df 为字符串时生效）
+    savefig : str
+        保存路径，为 None 时调用 plt.show()
     title : str
         图表标题
-    savefig : str
-        保存路径
     figsize : tuple
         图表尺寸
 
@@ -115,14 +135,25 @@ def plot_tick(code, date, title=None, savefig=None, figsize=(14, 7)):
     -------
     None
     """
-    ticks = get_tick_data(code, date=date)
-    if ticks is None or ticks.empty:
-        print('No tick data for %s on %s' % (code, date))
+    if isinstance(code_or_df, str):
+        code = code_or_df
+        ticks = get_tick_data(code, date=date)
+        if ticks is None or ticks.empty:
+            LOG.warning('No tick data for %s on %s', code, date)
+            return
+        chart_title = title or '%s Tick Replay (%s)' % (code, date)
+        tick_date = date
+    elif isinstance(code_or_df, pd.DataFrame):
+        ticks = code_or_df.copy()
+        chart_title = title or 'Tick Replay'
+        tick_date = date
+    else:
+        LOG.warning('code_or_df must be a stock code string or a DataFrame')
         return
 
-    df = _prepare_tick_df(ticks, date=date)
+    df = _prepare_tick_df(ticks, date=tick_date)
     if df.empty:
-        print('No valid tick data for %s on %s' % (code, date))
+        LOG.warning('No valid tick data')
         return
 
     df['avg_price'] = (df['amount'].cumsum()) / (df['volume'].cumsum()) \
@@ -140,7 +171,7 @@ def plot_tick(code, date, title=None, savefig=None, figsize=(14, 7)):
                   linewidth=0.8, linestyle='--', label='Avg Price')
     ax_price.set_ylabel('Price')
     ax_price.legend(loc='upper left', fontsize=8)
-    ax_price.set_title(title or '%s Tick Replay (%s)' % (code, date))
+    ax_price.set_title(chart_title)
     ax_price.grid(True, alpha=0.3)
 
     # Volume bars
@@ -160,7 +191,7 @@ def plot_tick(code, date, title=None, savefig=None, figsize=(14, 7)):
 
     if savefig:
         fig.savefig(savefig, dpi=150, bbox_inches='tight')
-        print('Saved to %s' % savefig)
+        LOG.info('Saved tick chart to %s', savefig)
     else:
         plt.show()
 
