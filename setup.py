@@ -85,6 +85,7 @@ setup(
     extras_require={
         'pro': ['pyzmq>=16.0.0', 'msgpack>=0.5.6'],
         'tdx': ['pytdx>=1.72'],
+        'quant': ['mplfinance>=0.12.0a0', 'pyarrow>=10.0.0'],
     },
     keywords='Global Financial Data',
     classifiers=['Development Status :: 4 - Beta',
